@@ -1,2 +1,1 @@
-# PureCloudApiLibraries
-Generated client libraries for the PureCloud Public API
+Common repository for generating client libraries.
