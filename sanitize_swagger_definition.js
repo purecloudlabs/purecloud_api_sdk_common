@@ -16,7 +16,6 @@ var wget = require('wget');
 var Q = require("q");
 var http = require('https');
 
-const API_VERSION_REGEX = /\/api\/v1/;
 const API_VERSION = "/api/v1/";
 const OUTPUT_INDEX = 2;
 const ENVIRONMENT_INDEX = 3;
@@ -40,8 +39,7 @@ function getHttpMethodOperationText(httpMethod){
 
 function generateMethodNameFromPathAndMethodOperation(operation, path, method){
 
-    var classPath = "PureCloud" + path.replace(API_VERSION_REGEX, '').replace(/\//g,'.').replace(/\.\{[A-Za-z]*\}/g, '')
-    var segments = path.replace(API_VERSION_REGEX, '').split("/");
+    var segments = path.replace(API_VERSION, '').split("/");
 
     var idParam = '';
     var firstMatch = true;
@@ -61,33 +59,41 @@ function generateMethodNameFromPathAndMethodOperation(operation, path, method){
             }
         }
         segments[x] = segments[x].charAt(0).toUpperCase() + segments[x].substr(1);
+        segments[x] = segments[x].replace(/[^_a-zA-Z0-9]/g,'');
 
     }
 
     var lastPop = segments.shift();
     if(segments.length > 1){
-        lastPop = segments.shift();
+    //    lastPop = segments.shift();
     }
 
     var newOpId = method + segments.join('');
 
-    //add the tag back in if needed
-    var firstTag = operation.tags[0].replace(/ /g, "");
-    if(operationIds.indexOf(newOpId) > -1){
-        newOpId = method + firstTag +  segments.join('');
-    }
+    //make sure that this isn't a duplicate method per a tag
+    for(var t=0; t <operation.tags.length; t++){
 
-    //still a duplicate, put the lastPopped value on
-    if(operationIds.indexOf(newOpId) > -1){
-        newOpId = method + firstTag + lastPop +  segments.join('');
-    }
+        var taggedValue = operation.tags[t] + newOpId;
 
-    if(operationIds.indexOf(newOpId) > -1){
-        console.error(newOpId + " already exists! ");
-        process.exit(1);
-    }
+        //add the tag back in if needed
+        var firstTag = operation.tags[0].replace(/ /g, "");
+        if(operationIds.indexOf(taggedValue) > -1){
 
-    operationIds.push(newOpId);
+            newOpId = method + lastPop +  segments.join('');
+            taggedValue = operation.tags[t] + newOpId;
+
+        }
+
+        if(operationIds.indexOf(newOpId) > -1){
+            console.error(newOpId + " already exists! ");
+            process.exit(1);
+        }
+
+        operationIds.push(taggedValue);
+        //if(newOpId.toLowerCase().indexOf( "getuser") > -1){
+            console.log(operation.tags[t] + " " + newOpId);
+        //}
+    }
 
     return newOpId;
 }
