@@ -48,26 +48,31 @@ function generateMethodNameFromPathAndMethodOperation(operation, path, method){
         if(segments[x].match(/\{([A-Za-z]*)\}/g)){
             if(firstMatch){
                 segments[x] = RegExp.$1.replace(/id/i,'');
+
                 //handle the case where the param name is just Id
                 if(segments[x] === ''){
                     segments[x] = 'Id';
                 }
+
+                /****
+                Cases like /api/v1/outbound/campaigns/{campaignId} would convert to getCampaignsCampaign
+                which was redundant, so we can remove the 'Campaigns' segment
+                ****/
+                if(x > 0 && segments[x-1].toLowerCase() === segments[x].toLowerCase() + "s" ){
+                    //console.log (segments[x-1].toLowerCase() + " matches "+ segments[x]);
+                    segments[x-1] = '';
+                }
+
                 firstMatch = false;
             }else{
-
                 segments[x] = "By" + RegExp.$1.charAt(0).toUpperCase() + RegExp.$1.substr(1);
             }
         }
         segments[x] = segments[x].charAt(0).toUpperCase() + segments[x].substr(1);
         segments[x] = segments[x].replace(/[^_a-zA-Z0-9]/g,'');
-
     }
 
     var lastPop = segments.shift();
-    if(segments.length > 1){
-    //    lastPop = segments.shift();
-    }
-
     var newOpId = method + segments.join('');
 
     //make sure that this isn't a duplicate method per a tag
@@ -78,10 +83,8 @@ function generateMethodNameFromPathAndMethodOperation(operation, path, method){
         //add the tag back in if needed
         var firstTag = operation.tags[0].replace(/ /g, "");
         if(operationIds.indexOf(taggedValue) > -1){
-
             newOpId = method + lastPop +  segments.join('');
             taggedValue = operation.tags[t] + newOpId;
-
         }
 
         if(operationIds.indexOf(newOpId) > -1){
@@ -91,7 +94,7 @@ function generateMethodNameFromPathAndMethodOperation(operation, path, method){
 
         operationIds.push(taggedValue);
         //if(newOpId.toLowerCase().indexOf( "getuser") > -1){
-            console.log(operation.tags[t] + " " + newOpId);
+            //console.log(operation.tags[t] + " " + newOpId);
         //}
     }
 
