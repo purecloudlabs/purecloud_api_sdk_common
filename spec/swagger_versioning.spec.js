@@ -305,3 +305,58 @@ describe("test merge of all", function(){
         expect(breaking["Point"].length).toBe(1);
     });
 });
+
+describe("test generate readme", function(){
+    it("should show a point release", function() {
+        versioning = require('../lib/swagger_versioning.js')()
+
+        var changeDescription=  "SOMETHING CHANGED";
+        var changeLog = {
+            "Major" : [changeDescription],
+            "Minor" : [],
+            "Point" :[]
+        }
+
+        var changelog = versioning.getChangeReadmeText(changeLog);
+        expect(changelog.indexOf("Breaking Changes")).toBeGreaterThan(-1);
+        expect(changelog.indexOf("Additions")).toBe(-1);
+        expect(changelog.indexOf("Other Changes")).toBe(-1);
+        expect(changelog.indexOf(changeDescription)).toBeGreaterThan(-1);
+        
+    });
+    it("should show a point release", function() {
+        versioning = require('../lib/swagger_versioning.js')()
+
+        var changeDescription=  "SOMETHING CHANGED";
+        var changeLog = {
+            "Major" : [],
+            "Minor" : [changeDescription],
+            "Point" :[]
+        }
+
+        var changelog = versioning.getChangeReadmeText(changeLog);
+        expect(changelog.indexOf("Breaking Changes")).toBe(-1);
+        expect(changelog.indexOf("Additions")).toBeGreaterThan(-1);
+        expect(changelog.indexOf("Other Changes")).toBe(-1);
+        expect(changelog.indexOf(changeDescription)).toBeGreaterThan(-1);
+
+    });
+
+    it("should show a point release", function() {
+        versioning = require('../lib/swagger_versioning.js')()
+
+        var changeDescription=  "SOMETHING CHANGED";
+        var changeLog = {
+            "Major" : [],
+            "Minor" : [],
+            "Point" :[changeDescription]
+        }
+
+        var changelog = versioning.getChangeReadmeText(changeLog);
+        expect(changelog.indexOf("Breaking Changes")).toBe(-1);
+        expect(changelog.indexOf("Additions")).toBe(-1);
+        expect(changelog.indexOf("Other Changes")).toBeGreaterThan(-1);
+        expect(changelog.indexOf(changeDescription)).toBeGreaterThan(-1);
+
+    });
+});

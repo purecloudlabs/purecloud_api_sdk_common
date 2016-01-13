@@ -35,8 +35,6 @@ gen.downloadSwaggerFile(environment, function(swagger){
     var swaggerDifferences = versioning.checkAll(oldSwagger, newSwagger);
 
     var hasChanges = versioning.updateVersionFile(swaggerDifferences, process.argv[VERSION_FILE_PATH_INDEX]);
-    console.log("Swagger file has changes ");
-    console.log(JSON.stringify(swaggerDifferences));
     
     if(hasChanges){
         fs.writeFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], JSON.stringify(newSwagger));
