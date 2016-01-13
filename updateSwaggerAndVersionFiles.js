@@ -7,6 +7,7 @@ This script will
 node updateSwaggerAndVersionFiles <oldswaggerfilepath> <versionfilepath> <environment (default mypurecloud.com)>
 
 ***********/
+var fs = require('fs');
 
 const SWAGGER_FILE_PATH_INDEX = 2;
 const VERSION_FILE_PATH_INDEX = 3;
