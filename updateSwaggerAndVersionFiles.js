@@ -19,16 +19,22 @@ if (process.argv.length <= VERSION_FILE_PATH_INDEX){
 }
 
 var versioning = require('./lib/swagger_versioning.js')();
-var gen = require('./lib/swagger_versioning.js')();
+var gen = require('./lib/swagger_gen.js')();
 
 var oldSwagger = JSON.parse(fs.readFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], 'UTF-8'));
 
-gen.downloadSwaggerFile(function(swagger){
+var environment = "mypurecloud.com";
+if (process.argv.length <= ENVIRONMENT_INDEX){
+    environment = process.argv[ENVIRONMENT_INDEX];
+}
+
+gen.downloadSwaggerFile(environment, function(swagger){
+
     var newSwagger = gen.sanitizeSwagger(swagger);
 
-    var swaggerDifferences = version.checkAll(oldSwagger, newSwagger);
+    var swaggerDifferences = versioning.checkAll(oldSwagger, newSwagger);
 
-    var hasChanges = version.updateVersionFile(swaggerDifferences, process.argv[VERSION_FILE_PATH_INDEX]);
+    var hasChanges = versioning.updateVersionFile(swaggerDifferences, process.argv[VERSION_FILE_PATH_INDEX]);
 
     if(hasChanges){
         fs.writeFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], JSON.stringify(newSwagger));
