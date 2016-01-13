@@ -16,9 +16,12 @@
     "url": "https://github.com/MyPureCloud/PureCloudApiLibraries/issues"
   },
   "dependencies": {
-      "lodash" : "3.10.1",
+      "lodash" : "4.0.0",
       "wget" :"0.0.1",
       "q" : "1.4.1"
+  },
+  "devDependencies":{
+    
   },
   "homepage": "https://github.com/MyPureCloud/PureCloudApiLibraries"
 }

@@ -1,0 +1,846 @@
+{
+"base" :{
+      "paths": {
+        "/api/v1/analytics/alerting/alerts": {
+          "get": {
+            "tags": [
+              "Analytics"
+            ],
+            "summary": "Get a list of alerts.",
+            "description": "",
+            "operationId": "getAlertingAlerts",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "pageNumber",
+                "in": "query",
+                "description": "Page number",
+                "required": false,
+                "type": "integer",
+                "default": 1,
+                "format": "int32"
+              },
+              {
+                "name": "pageSize",
+                "in": "query",
+                "description": "Page size",
+                "required": false,
+                "type": "integer",
+                "default": 25,
+                "format": "int32"
+              },
+              {
+                "name": "sortBy",
+                "in": "query",
+                "description": "title, startTime, endTime, description or unread",
+                "required": false,
+                "type": "string",
+                "default": "startTime"
+              },
+              {
+                "name": "sortOrder",
+                "in": "query",
+                "description": "ascending or descending",
+                "required": false,
+                "type": "string",
+                "default": "ascending"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "successful operation",
+                "schema": {
+                  "$ref": "#/definitions/AlertEntityListing"
+                }
+              },
+              "400": {
+                "description": "The request could not be understood by the server due to malformed syntax.",
+                "schema": {
+                  "$ref": "#/definitions/ErrorBody"
+                },
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 400,
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be understood by the server due to malformed syntax.",
+                    "details": []
+                  }
+                }
+              },
+              "401": {
+                "description": "No authorization token (cookie or header) was found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 401,
+                    "code": "AUTHENTICATION_REQUIRED",
+                    "message": "No authorization token (cookie or header) was found.",
+                    "details": []
+                  }
+                }
+              },
+              "403": {
+                "description": "You are not authorized to perform the requested action.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 403,
+                    "code": "NOT_AUTHORIZED",
+                    "message": "You are not authorized to perform the requested action.",
+                    "details": []
+                  }
+                }
+              },
+              "404": {
+                "description": "The requested resource was not found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 404,
+                    "code": "NOT_FOUND",
+                    "message": "The requested resource was not found.",
+                    "details": []
+                  }
+                }
+              },
+              "415": {
+                "description": "Unsupported Media Type - Unsupported or incorrect media type, such as an incorrect Content-Type value in the header."
+              },
+              "429": {
+                "description": "Too Many Requests",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "Too Many Requests",
+                    "details": []
+                  }
+                }
+              },
+              "500": {
+                "description": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                    "details": []
+                  }
+                }
+              },
+              "503": {
+                "description": "Service Unavailable - The server is currently unavailable (because it is overloaded or down for maintenance)."
+              },
+              "504": {
+                "description": "The request timed out.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 504,
+                    "code": "REQUEST_TIMEOUT",
+                    "message": "The request timed out.",
+                    "details": []
+                  }
+                }
+              }
+            },
+            "security": [
+              {
+                "PureCloud Auth": [
+                  "all"
+                ]
+              }
+            ]
+          }
+        },
+        "/api/v1/analytics/alerting/alerts/unread": {
+          "get": {
+            "tags": [
+              "Analytics"
+            ],
+            "summary": "A count of unread alerts.",
+            "description": "",
+            "operationId": "getAlertingAlertsUnread",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [],
+            "responses": {
+              "200": {
+                "description": "successful operation",
+                "schema": {
+                  "$ref": "#/definitions/UnreadMetric"
+                }
+              },
+              "400": {
+                "description": "The request could not be understood by the server due to malformed syntax.",
+                "schema": {
+                  "$ref": "#/definitions/ErrorBody"
+                },
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 400,
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be understood by the server due to malformed syntax.",
+                    "details": []
+                  }
+                }
+              },
+              "401": {
+                "description": "No authorization token (cookie or header) was found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 401,
+                    "code": "AUTHENTICATION_REQUIRED",
+                    "message": "No authorization token (cookie or header) was found.",
+                    "details": []
+                  }
+                }
+              },
+              "403": {
+                "description": "You are not authorized to perform the requested action.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 403,
+                    "code": "NOT_AUTHORIZED",
+                    "message": "You are not authorized to perform the requested action.",
+                    "details": []
+                  }
+                }
+              },
+              "404": {
+                "description": "The requested resource was not found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 404,
+                    "code": "NOT_FOUND",
+                    "message": "The requested resource was not found.",
+                    "details": []
+                  }
+                }
+              },
+              "415": {
+                "description": "Unsupported Media Type - Unsupported or incorrect media type, such as an incorrect Content-Type value in the header."
+              },
+              "429": {
+                "description": "Too Many Requests",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "Too Many Requests",
+                    "details": []
+                  }
+                }
+              },
+              "500": {
+                "description": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                    "details": []
+                  }
+                }
+              },
+              "503": {
+                "description": "Service Unavailable - The server is currently unavailable (because it is overloaded or down for maintenance)."
+              },
+              "504": {
+                "description": "The request timed out.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 504,
+                    "code": "REQUEST_TIMEOUT",
+                    "message": "The request timed out.",
+                    "details": []
+                  }
+                }
+              }
+            },
+            "security": [
+              {
+                "PureCloud Auth": [
+                  "all"
+                ]
+              }
+            ]
+          }
+        }
+    }
+},
+"removedPath" :{
+      "paths": {
+        "/api/v1/analytics/alerting/alerts": {
+          "get": {
+            "tags": [
+              "Analytics"
+            ],
+            "summary": "Get a list of alerts.",
+            "description": "",
+            "operationId": "getAlertingAlerts",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "pageNumber",
+                "in": "query",
+                "description": "Page number",
+                "required": false,
+                "type": "integer",
+                "default": 1,
+                "format": "int32"
+              },
+              {
+                "name": "pageSize",
+                "in": "query",
+                "description": "Page size",
+                "required": false,
+                "type": "integer",
+                "default": 25,
+                "format": "int32"
+              },
+              {
+                "name": "sortBy",
+                "in": "query",
+                "description": "title, startTime, endTime, description or unread",
+                "required": false,
+                "type": "string",
+                "default": "startTime"
+              },
+              {
+                "name": "sortOrder",
+                "in": "query",
+                "description": "ascending or descending",
+                "required": false,
+                "type": "string",
+                "default": "ascending"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "successful operation",
+                "schema": {
+                  "$ref": "#/definitions/AlertEntityListing"
+                }
+              },
+              "400": {
+                "description": "The request could not be understood by the server due to malformed syntax.",
+                "schema": {
+                  "$ref": "#/definitions/ErrorBody"
+                },
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 400,
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be understood by the server due to malformed syntax.",
+                    "details": []
+                  }
+                }
+              },
+              "401": {
+                "description": "No authorization token (cookie or header) was found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 401,
+                    "code": "AUTHENTICATION_REQUIRED",
+                    "message": "No authorization token (cookie or header) was found.",
+                    "details": []
+                  }
+                }
+              },
+              "403": {
+                "description": "You are not authorized to perform the requested action.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 403,
+                    "code": "NOT_AUTHORIZED",
+                    "message": "You are not authorized to perform the requested action.",
+                    "details": []
+                  }
+                }
+              },
+              "404": {
+                "description": "The requested resource was not found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 404,
+                    "code": "NOT_FOUND",
+                    "message": "The requested resource was not found.",
+                    "details": []
+                  }
+                }
+              },
+              "415": {
+                "description": "Unsupported Media Type - Unsupported or incorrect media type, such as an incorrect Content-Type value in the header."
+              },
+              "429": {
+                "description": "Too Many Requests",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "Too Many Requests",
+                    "details": []
+                  }
+                }
+              },
+              "500": {
+                "description": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                    "details": []
+                  }
+                }
+              },
+              "503": {
+                "description": "Service Unavailable - The server is currently unavailable (because it is overloaded or down for maintenance)."
+              },
+              "504": {
+                "description": "The request timed out.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 504,
+                    "code": "REQUEST_TIMEOUT",
+                    "message": "The request timed out.",
+                    "details": []
+                  }
+                }
+              }
+            },
+            "security": [
+              {
+                "PureCloud Auth": [
+                  "all"
+                ]
+              }
+            ]
+          }
+        }
+    }
+},
+"addedPath" :{
+      "paths": {
+        "/api/v1/analytics/alerting/alerts": {
+          "get": {
+            "tags": [
+              "Analytics"
+            ],
+            "summary": "Get a list of alerts.",
+            "description": "",
+            "operationId": "getAlertingAlerts",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "pageNumber",
+                "in": "query",
+                "description": "Page number",
+                "required": false,
+                "type": "integer",
+                "default": 1,
+                "format": "int32"
+              },
+              {
+                "name": "pageSize",
+                "in": "query",
+                "description": "Page size",
+                "required": false,
+                "type": "integer",
+                "default": 25,
+                "format": "int32"
+              },
+              {
+                "name": "sortBy",
+                "in": "query",
+                "description": "title, startTime, endTime, description or unread",
+                "required": false,
+                "type": "string",
+                "default": "startTime"
+              },
+              {
+                "name": "sortOrder",
+                "in": "query",
+                "description": "ascending or descending",
+                "required": false,
+                "type": "string",
+                "default": "ascending"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "successful operation",
+                "schema": {
+                  "$ref": "#/definitions/AlertEntityListing"
+                }
+              },
+              "400": {
+                "description": "The request could not be understood by the server due to malformed syntax.",
+                "schema": {
+                  "$ref": "#/definitions/ErrorBody"
+                },
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 400,
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be understood by the server due to malformed syntax.",
+                    "details": []
+                  }
+                }
+              },
+              "401": {
+                "description": "No authorization token (cookie or header) was found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 401,
+                    "code": "AUTHENTICATION_REQUIRED",
+                    "message": "No authorization token (cookie or header) was found.",
+                    "details": []
+                  }
+                }
+              },
+              "403": {
+                "description": "You are not authorized to perform the requested action.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 403,
+                    "code": "NOT_AUTHORIZED",
+                    "message": "You are not authorized to perform the requested action.",
+                    "details": []
+                  }
+                }
+              },
+              "404": {
+                "description": "The requested resource was not found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 404,
+                    "code": "NOT_FOUND",
+                    "message": "The requested resource was not found.",
+                    "details": []
+                  }
+                }
+              },
+              "415": {
+                "description": "Unsupported Media Type - Unsupported or incorrect media type, such as an incorrect Content-Type value in the header."
+              },
+              "429": {
+                "description": "Too Many Requests",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "Too Many Requests",
+                    "details": []
+                  }
+                }
+              },
+              "500": {
+                "description": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                    "details": []
+                  }
+                }
+              },
+              "503": {
+                "description": "Service Unavailable - The server is currently unavailable (because it is overloaded or down for maintenance)."
+              },
+              "504": {
+                "description": "The request timed out.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 504,
+                    "code": "REQUEST_TIMEOUT",
+                    "message": "The request timed out.",
+                    "details": []
+                  }
+                }
+              }
+            },
+            "security": [
+              {
+                "PureCloud Auth": [
+                  "all"
+                ]
+              }
+            ]
+          }
+        },
+        "/api/v1/analytics/alerting/alerts": {
+          "get": {
+            "tags": [
+              "Analytics"
+            ],
+            "summary": "Get a list of alerts.",
+            "description": "",
+            "operationId": "getAlertingAlerts",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [
+              {
+                "name": "pageNumber",
+                "in": "query",
+                "description": "Page number",
+                "required": false,
+                "type": "integer",
+                "default": 1,
+                "format": "int32"
+              },
+              {
+                "name": "pageSize",
+                "in": "query",
+                "description": "Page size",
+                "required": false,
+                "type": "integer",
+                "default": 25,
+                "format": "int32"
+              },
+              {
+                "name": "sortBy",
+                "in": "query",
+                "description": "title, startTime, endTime, description or unread",
+                "required": false,
+                "type": "string",
+                "default": "startTime"
+              },
+              {
+                "name": "sortOrder",
+                "in": "query",
+                "description": "ascending or descending",
+                "required": false,
+                "type": "string",
+                "default": "ascending"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "successful operation",
+                "schema": {
+                  "$ref": "#/definitions/AlertEntityListing"
+                }
+              },
+              "400": {
+                "description": "The request could not be understood by the server due to malformed syntax.",
+                "schema": {
+                  "$ref": "#/definitions/ErrorBody"
+                },
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 400,
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be understood by the server due to malformed syntax.",
+                    "details": []
+                  }
+                }
+              },
+              "401": {
+                "description": "No authorization token (cookie or header) was found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 401,
+                    "code": "AUTHENTICATION_REQUIRED",
+                    "message": "No authorization token (cookie or header) was found.",
+                    "details": []
+                  }
+                }
+              },
+              "403": {
+                "description": "You are not authorized to perform the requested action.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 403,
+                    "code": "NOT_AUTHORIZED",
+                    "message": "You are not authorized to perform the requested action.",
+                    "details": []
+                  }
+                }
+              },
+              "404": {
+                "description": "The requested resource was not found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 404,
+                    "code": "NOT_FOUND",
+                    "message": "The requested resource was not found.",
+                    "details": []
+                  }
+                }
+              },
+              "415": {
+                "description": "Unsupported Media Type - Unsupported or incorrect media type, such as an incorrect Content-Type value in the header."
+              },
+              "429": {
+                "description": "Too Many Requests",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "Too Many Requests",
+                    "details": []
+                  }
+                }
+              },
+              "500": {
+                "description": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                    "details": []
+                  }
+                }
+              },
+              "503": {
+                "description": "Service Unavailable - The server is currently unavailable (because it is overloaded or down for maintenance)."
+              },
+              "504": {
+                "description": "The request timed out.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 504,
+                    "code": "REQUEST_TIMEOUT",
+                    "message": "The request timed out.",
+                    "details": []
+                  }
+                }
+              }
+            },
+            "security": [
+              {
+                "PureCloud Auth": [
+                  "all"
+                ]
+              }
+            ]
+          }
+        },
+
+        "/api/v1/a/new/path": {
+          "get": {
+            "tags": [
+              "Analytics"
+            ],
+            "summary": "A count of unread alerts.",
+            "description": "",
+            "operationId": "getAlertingAlertsUnread",
+            "produces": [
+              "application/json"
+            ],
+            "parameters": [],
+            "responses": {
+              "200": {
+                "description": "successful operation",
+                "schema": {
+                  "$ref": "#/definitions/UnreadMetric"
+                }
+              },
+              "400": {
+                "description": "The request could not be understood by the server due to malformed syntax.",
+                "schema": {
+                  "$ref": "#/definitions/ErrorBody"
+                },
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 400,
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be understood by the server due to malformed syntax.",
+                    "details": []
+                  }
+                }
+              },
+              "401": {
+                "description": "No authorization token (cookie or header) was found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 401,
+                    "code": "AUTHENTICATION_REQUIRED",
+                    "message": "No authorization token (cookie or header) was found.",
+                    "details": []
+                  }
+                }
+              },
+              "403": {
+                "description": "You are not authorized to perform the requested action.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 403,
+                    "code": "NOT_AUTHORIZED",
+                    "message": "You are not authorized to perform the requested action.",
+                    "details": []
+                  }
+                }
+              },
+              "404": {
+                "description": "The requested resource was not found.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 404,
+                    "code": "NOT_FOUND",
+                    "message": "The requested resource was not found.",
+                    "details": []
+                  }
+                }
+              },
+              "415": {
+                "description": "Unsupported Media Type - Unsupported or incorrect media type, such as an incorrect Content-Type value in the header."
+              },
+              "429": {
+                "description": "Too Many Requests",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "Too Many Requests",
+                    "details": []
+                  }
+                }
+              },
+              "500": {
+                "description": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The server encountered an unexpected condition which prevented it from fulfilling the request.",
+                    "details": []
+                  }
+                }
+              },
+              "503": {
+                "description": "Service Unavailable - The server is currently unavailable (because it is overloaded or down for maintenance)."
+              },
+              "504": {
+                "description": "The request timed out.",
+                "examples": {
+                  "com.inin.pubapi.domain.ErrorBody": {
+                    "status": 504,
+                    "code": "REQUEST_TIMEOUT",
+                    "message": "The request timed out.",
+                    "details": []
+                  }
+                }
+              }
+            },
+            "security": [
+              {
+                "PureCloud Auth": [
+                  "all"
+                ]
+              }
+            ]
+          }
+        }
+    }
+}
+
+}
