@@ -1,8 +1,1 @@
-{
-    "major" :"0",
-    "minor" :"0",
-    "point" :"0",
-    "changelog":{
-
-    }
-}
+{"major":1,"minor":0,"point":0,"changelog":{"0100":["Paths removed [\"/api/v1/analytics/alerting/fake\"]","Path /api/v1/analytics/alerting/fake is missing;","Paths added [\"/api/v1/analytics/alerting/alerts\"]"],"01100":["Paths removed [\"/api/v1/analytics/alerting/fake\"]","Path /api/v1/analytics/alerting/fake is missing;","Paths added [\"/api/v1/analytics/alerting/alerts\"]"],"011100":["Paths removed [\"/api/v1/analytics/alerting/fake\"]","Path /api/v1/analytics/alerting/fake is missing;","Paths added [\"/api/v1/analytics/alerting/alerts\"]"],"01111.0.0":["Paths removed [\"/api/v1/analytics/alerting/fake\"]","Path /api/v1/analytics/alerting/fake is missing;","Paths added [\"/api/v1/analytics/alerting/alerts\"]"],"01.0.0":["Paths removed [\"/api/v1/analytics/alerting/fake\"]","Path /api/v1/analytics/alerting/fake is missing;","Paths added [\"/api/v1/analytics/alerting/alerts\"]"],"1.0.0":["Paths removed [\"/api/v1/analytics/alerting/fake\"]","Path /api/v1/analytics/alerting/fake is missing;","Paths added [\"/api/v1/analytics/alerting/alerts\"]"]}}
