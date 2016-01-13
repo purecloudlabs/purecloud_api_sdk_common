@@ -10,12 +10,6 @@ if (process.argv.length <= OUTPUT_INDEX){
     process.exit(1);
 }
 
-var _ = require('lodash');
-var fs = require('fs');
-var wget = require('wget');
-var Q = require("q");
-var http = require('https');
-
 const API_VERSION = "/api/v1/";
 const OUTPUT_INDEX = 2;
 const ENVIRONMENT_INDEX = 3;

@@ -4,7 +4,7 @@
   "description": "Generated client libraries for the PureCloud Public API",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jasmine"
   },
   "repository": {
     "type": "git",
@@ -21,7 +21,7 @@
       "q" : "1.4.1"
   },
   "devDependencies":{
-    
+
   },
   "homepage": "https://github.com/MyPureCloud/PureCloudApiLibraries"
 }
