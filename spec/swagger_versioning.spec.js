@@ -12,7 +12,7 @@ describe("Major breaking changes", function(){
     // return errors changed/added/removed
 
     beforeEach(function(){
-        breakingChanges = require('../lib/breaking_changes.js')();
+        breakingChanges = require('../lib/swagger_versioning.js')();
     });
 
     it("if the number of parameters is different", function() {
@@ -170,7 +170,7 @@ describe("Minor point breaking changes", function(){
 
 
     beforeEach(function(){
-        breakingChanges = require('../lib/breaking_changes.js')()
+        breakingChanges = require('../lib/swagger_versioning.js')()
     });
 
     it("if tags were added", function() {
@@ -233,8 +233,8 @@ describe("Warning changes", function(){
 
         var breaking = breakingChanges.checkOperations(oldSwagger,newSwagger);
 
-        expect(breaking["Warning"]).not.toBeNull();
-        expect(breaking["Warning"].length).toBe(1);
+        expect(breaking["Point"]).not.toBeNull();
+        expect(breaking["Point"].length).toBe(1);
     });
 
     it("if operation summary was changed", function() {
@@ -245,8 +245,8 @@ describe("Warning changes", function(){
 
         var breaking = breakingChanges.checkOperations(oldSwagger,newSwagger);
 
-        expect(breaking["Warning"]).not.toBeNull();
-        expect(breaking["Warning"].length).toBe(1);
+        expect(breaking["Point"]).not.toBeNull();
+        expect(breaking["Point"].length).toBe(1);
     });
 
     it("if operation response description was changed", function() {
@@ -257,15 +257,15 @@ describe("Warning changes", function(){
 
         var breaking = breakingChanges.checkOperations(oldSwagger,newSwagger);
 
-        expect(breaking["Warning"]).not.toBeNull();
-        expect(breaking["Warning"].length).toBe(1);
+        expect(breaking["Point"]).not.toBeNull();
+        expect(breaking["Point"].length).toBe(1);
     });
 
 });
 
 describe("No Changes", function(){
     beforeEach(function(){
-        breakingChanges = require('../lib/breaking_changes.js')()
+        breakingChanges = require('../lib/swagger_versioning.js')()
     });
 
     it("should not have any changes in methods", function() {
@@ -293,7 +293,7 @@ describe("No Changes", function(){
 describe("test merge of all", function(){
 
     it("if operation response description was changed", function() {
-        breakingChanges = require('../lib/breaking_changes.js')()
+        breakingChanges = require('../lib/swagger_versioning.js')()
         var swaggerDefinitions = JSON.parse(fs.readFileSync("./spec/swaggerDefinitions/operationTests.json", 'UTF-8'));
 
         var oldSwagger = swaggerDefinitions.base;
@@ -301,7 +301,7 @@ describe("test merge of all", function(){
 
         var breaking = breakingChanges.checkAll(oldSwagger,newSwagger);
 
-        expect(breaking["Warning"]).not.toBeNull();
-        expect(breaking["Warning"].length).toBe(1);
+        expect(breaking["Point"]).not.toBeNull();
+        expect(breaking["Point"].length).toBe(1);
     });
 });
