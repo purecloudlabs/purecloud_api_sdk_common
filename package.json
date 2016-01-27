@@ -1,8 +1,8 @@
 {
   "name": "PureCloudApiLibraries",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Generated client libraries for the PureCloud Public API",
-  "main": "index.js",
+  "main": "lib/app.js",
   "scripts": {
     "test": "jasmine"
   },
