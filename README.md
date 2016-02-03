@@ -1,8 +1,10 @@
 The purpose of this repository is to house scripts that are used in the process of auto generating api client libraries based on the swagger definition.  
 
-[Javascript Client](https://github.com/MyPureCloud/purecloud_javascript_client)
-[C# Client](https://github.com/MyPureCloud/PureCloudApiLibrary_CSharp)
-[Ruby Client](https://github.com/MyPureCloud/PureCloudApiLibrary_Ruby)
+[Javascript Client](https://github.com/MyPureCloud/purecloud_api_sdk_javascript)
+
+[C# Client](https://github.com/MyPureCloud/purecloud_api_sdk_csharp)
+
+[Ruby Client](https://github.com/MyPureCloud/purecloud_api_sdk_ruby)
 
 The process generally looks like this:
 
