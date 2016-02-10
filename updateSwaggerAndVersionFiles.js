@@ -18,26 +18,21 @@ if (process.argv.length <= VERSION_FILE_PATH_INDEX){
     process.exit(1);
 }
 
-var versioning = require('./lib/swagger_versioning.js')();
-var gen = require('./lib/swagger_gen.js')();
-
-var oldSwagger = JSON.parse(fs.readFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], 'UTF-8'));
+var pclib = require('./lib/app.js');
+var pclibSwaggerVersion = pclib.swaggerVersioning();
 
 var environment = "mypurecloud.com";
 if (process.argv.length <= ENVIRONMENT_INDEX){
     environment = process.argv[ENVIRONMENT_INDEX];
 }
 
-gen.downloadSwaggerFile(environment, function(swagger){
+pclib.updateSwaggerAndVersion(process.argv[SWAGGER_FILE_PATH_INDEX], process.argv[VERSION_FILE_PATH_INDEX], environment, function(hasChanges){
+        var version = pclibSwaggerVersion.getVersionString(process.argv[VERSION_FILE_PATH_INDEX]);
 
-    var newSwagger = gen.sanitizeSwagger(swagger);
-
-    var swaggerDifferences = versioning.checkAll(oldSwagger, newSwagger);
-
-    var hasChanges = versioning.updateVersionFile(swaggerDifferences, process.argv[VERSION_FILE_PATH_INDEX]);
-
-    if(hasChanges){
-        fs.writeFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], JSON.stringify(newSwagger));
-        console.log(versioning.getVersionString(process.argv[SWAGGER_FILE_PATH_INDEX]))
-    }
-});
+        if(hasChanges){
+            console.log("has changes, new version: " + version)
+            fs.writeFileSync("newVersion.md", version);
+        }else{
+            console.log("no changes, still version " + version)
+        }
+    });
