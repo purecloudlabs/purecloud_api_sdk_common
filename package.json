@@ -20,7 +20,8 @@
       "wget" :"0.0.1",
       "q" : "1.4.1",
       "semver" :"*",
-      "github-api-promise":"*"
+      "github-api-promise":"*",
+      "dateformat":"*"
   },
   "devDependencies":{
 
