@@ -1,7 +1,7 @@
 var release = require('./lib/create_release')();
 
 var version = '0.0.0.0';
-var token, zipFileName, zipFilePath, releaseNotes = null;
+var token, repo, zipFileName, zipFilePath, releaseNotes = null;
 
 function stringStartsWith (string, prefix) {
     return string.slice(0, prefix.length) == prefix;
@@ -21,6 +21,9 @@ process.argv.forEach(function (val, index, array) {
     }
     else if (stringStartsWith(val, '/zipfilepath=')) {
         zipFilePath = val.substring(13);
+    }
+    else if (stringStartsWith(val, '/repo=')) {
+        repo = val.substring(6);
     }
 });
 
