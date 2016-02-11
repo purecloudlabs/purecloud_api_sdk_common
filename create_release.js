@@ -3,7 +3,9 @@ var release = require('./lib/create_release')();
 var version = '0.0.0.0';
 var token, zipFileName, zipFilePath, releaseNotes = null;
 
-
+function stringStartsWith (string, prefix) {
+    return string.slice(0, prefix.length) == prefix;
+}
 // Parse args
 process.argv.forEach(function (val, index, array) {
     if (stringStartsWith(val, '/version=')) {
