@@ -19,7 +19,8 @@
       "lodash" : "4.0.0",
       "wget" :"0.0.1",
       "q" : "1.4.1",
-      "semver" :"*"
+      "semver" :"*",
+      "github-api-promise":"*"
   },
   "devDependencies":{
 
