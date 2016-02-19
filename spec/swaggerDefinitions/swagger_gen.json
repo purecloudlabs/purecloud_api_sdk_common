@@ -25,70 +25,9 @@
             "get": {
                 "tags": [
                     "Analytics"
-                ]
-            }
-        },
-        "/api/v1/telephony/bootstrap/phones/{id}/{path}/{file}": {
-            "get": {
-                "tags": [
-                    "Analytics"
-                ]
-            }
-        },
-        "/api/v1/outbound/campaigns/{campaignId}/somethings/{somethingid}": {
-            "get": {
-                "tags": [
-                    "Analytics"
-                ]
-            }
-        },
-        "/api/v1/users/someuser/{id}": {
-            "get": {
-                "tags": [
-                    "Analytics"
-                ]
-            }
-        },
-        "/api/v1/outbound/duplicate/Route": {
-            "get": {
-                "tags": [
-                    "Analytics"
-                ]
-            }
-        },
-        "/api/v1/inbound/duplicate/Route": {
-            "get": {
-                "tags": [
-                    "Analytics"
-                ]
-            }
-        },
-
-        "/api/v1/test/httpmethod": {
-            "get": {
-                "tags": [
-                    "Analytics"
-                ]
-            },
-            "post": {
-                "tags": [
-                    "Analytics"
-                ]
-            },
-            "patch": {
-                "tags": [
-                    "Analytics"
-                ]
-            },
-            "put": {
-                "tags": [
-                    "Analytics"
-                ]
-            },
-            "delete": {
-                "tags": [
-                    "Analytics"
-                ]
+                ],
+                "x-inin-method-name" : "getCarrierservicesNumberpurchaseOrder",
+                "operationId" : "uglyOpId"
             }
         }
     },
