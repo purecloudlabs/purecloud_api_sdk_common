@@ -3,8 +3,8 @@ var fs = require('fs');
 const SWAGGER_FILE_PATH_INDEX = 2;
 const ENVIRONMENT_INDEX = 3;
 
-if (process.argv.length <= VERSION_FILE_PATH_INDEX){
-    console.log("USAGE: node updateSwaggerAndVersionFiles <oldswaggerfilepath> <versionfilepath> <environment (default mypurecloud.com)>");
+if (process.argv.length <= SWAGGER_FILE_PATH_INDEX){
+    console.log("USAGE: node downloadAndSanitizeSwagger <swaggerfilepath> <environment (default mypurecloud.com)>");
     process.exit(1);
 }
 
