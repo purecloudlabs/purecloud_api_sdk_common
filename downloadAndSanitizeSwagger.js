@@ -10,9 +10,9 @@ if (process.argv.length <= SWAGGER_FILE_PATH_INDEX){
 
 var pclib = require('./lib/app.js');
 var pcSwaggerGen = pclib.swaggerGen();
-
 var environment = "mypurecloud.com";
-if (process.argv.length <= ENVIRONMENT_INDEX){
+
+if (process.argv.length >= ENVIRONMENT_INDEX){
     environment = process.argv[ENVIRONMENT_INDEX];
 }
 
