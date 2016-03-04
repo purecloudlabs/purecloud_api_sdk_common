@@ -17,7 +17,5 @@ if (process.argv.length >= ENVIRONMENT_INDEX){
 }
 
 pcSwaggerGen.downloadSwaggerFile(environment, function(swagger){
-    pcSwaggerGen.sanitizeSwagger(swagger, function(cleanSwagger){
-        fs.writeFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], JSON.stringify(newSwagger));
-    } );
+    fs.writeFileSync(process.argv[SWAGGER_FILE_PATH_INDEX], JSON.stringify(pcSwaggerGen.sanitizeSwagger(swagger)));
 });
