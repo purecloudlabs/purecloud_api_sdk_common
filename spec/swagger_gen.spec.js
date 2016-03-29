@@ -11,6 +11,13 @@ describe("download swagger file", function(){
             expect(swagger.info).not.toBe(null);
         });
     });
+
+    it("Should be able to download from a full url", function(){
+        swaggerGen.downloadSwaggerFile("https://api.mypurecloud.com/v1/docs/swagger", function(swagger){
+            expect(swagger).not.toBe(null);
+            expect(swagger.info).not.toBe(null);
+        });
+    });
 });
 
 describe("sanitize operations", function(){
