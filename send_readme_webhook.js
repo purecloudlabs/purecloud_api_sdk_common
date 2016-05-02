@@ -50,7 +50,8 @@ stdin.on('end', function() {
   }
   //console.log(webhook);
   if(process.env['WEBHOOK_URL'] != null && process.env['WEBHOOK_URL'] != ''){
-      var webhookUrl = url.parse(process.env['WEBHOOK_URL'])
+      console.log("Sending webhook to " + process.env['WEBHOOK_URL']);
+      var webhookUrl = url.parse(process.env['WEBHOOK_URL']);
       request({
         url: webhookUrl,
         method: "POST",
@@ -61,7 +62,8 @@ stdin.on('end', function() {
         body: webhook
      }, function (err, res) {
         //console.log(res);
-        //console.log(err);
+        console.log("error?")
+        console.log(err);
      });
 
   }
