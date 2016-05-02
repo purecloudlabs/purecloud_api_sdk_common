@@ -21,7 +21,8 @@
       "q" : "1.4.1",
       "semver" :"*",
       "github-api-promise":"*",
-      "dateformat":"*"
+      "dateformat":"*",
+      "request" : "2.67.0"
   },
   "devDependencies":{
 
