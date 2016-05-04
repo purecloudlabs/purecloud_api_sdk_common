@@ -12,7 +12,6 @@ var data = "";
 
 stdin.on('data', function(chunk) {
   data += chunk;
-  console.log(data);
 });
 
 stdin.on('end', function() {
