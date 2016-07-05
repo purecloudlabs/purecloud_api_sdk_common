@@ -29,10 +29,93 @@
                 "x-inin-method-name" : "getCarrierservicesNumberpurchaseOrder",
                 "operationId" : "uglyOpId"
             }
+        },
+        "/modeltest": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "x-inin-method-name" : "getmodeltest",
+                "operationId" : "getmodeltest"
+            },
+            "post": {
+                "tags": [
+                    "Analytics"
+                ],
+                "x-inin-method-name" : "postmodeltest",
+                "operationId" : "postmodeltest",
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "InteractionStatsAlert",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/TestModel"
+                        }
+                    }
+                ]
+            }
         }
     },
     "externalDocs": {
         "description": "PureCloud API Documentation",
         "url": "https://developer.mypurecloud.com"
+    },
+    "definitions": {
+        "TestModel": {
+            "type": "object",
+            "properties": {
+                "prop1": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/TestModel2"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "docusignTemplateId": {
+                    "type": "string"
+                },
+                "selfUri": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The URI for this object",
+                    "readOnly": true
+                }
+            }
+        },
+
+        "TestModel2": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "The globally unique identifier for the object.",
+                    "readOnly": true
+                }
+            }
+        },
+        "TestModel3": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "The globally unique identifier for the object.",
+                    "readOnly": true
+                }
+            }
+        },
+        "UnUsedModel": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "The globally unique identifier for the object.",
+                    "readOnly": true
+                }
+            }
+        }
     }
 }

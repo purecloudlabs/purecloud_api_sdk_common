@@ -39,4 +39,12 @@ describe("sanitize operations", function(){
         expect(operationId).toBe("getCarrierservicesNumberpurchaseOrder");
     });
 
+    it("should remove models", function(){
+        var swagger = swaggerGen.sanitizeSwagger(swaggerDefinitions);
+        var operationId = getOperationId(swagger, "/api/v1/outbound/campaigns/{campaignId}", "get");
+
+        expect(swagger.definitions.TestModel3).not.toBe(null);
+        expect(swagger.definitions.UnUsedModel).not.toBeDefined(); 
+    });
+
 });
