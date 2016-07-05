@@ -43,8 +43,12 @@ describe("sanitize operations", function(){
         var swagger = swaggerGen.sanitizeSwagger(swaggerDefinitions);
         var operationId = getOperationId(swagger, "/api/v1/outbound/campaigns/{campaignId}", "get");
 
-        expect(swagger.definitions.TestModel3).not.toBe(null);
-        expect(swagger.definitions.UnUsedModel).not.toBeDefined(); 
+        expect(swagger.definitions.TestModel2).toBeDefined();
+        expect(swagger.definitions.TestModel2).toBeDefined();
+        expect(swagger.definitions.Queue).toBeDefined();
+        expect(swagger.definitions.AdditionalPropertiesModel).toBeDefined();
+
+        expect(swagger.definitions.UnUsedModel).not.toBeDefined();
     });
 
 });

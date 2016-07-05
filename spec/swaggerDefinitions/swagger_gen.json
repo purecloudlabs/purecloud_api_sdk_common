@@ -73,7 +73,8 @@
                     }
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "$ref": "#/definitions/Queue"
                 },
                 "docusignTemplateId": {
                     "type": "string"
@@ -86,7 +87,23 @@
                 }
             }
         },
-
+        "Queue": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "The globally unique identifier for the object.",
+                    "readOnly": true
+                },
+                "responses": {
+                    "type": "object",
+                    "description": "Map of disposition identifiers to reactions. For example: {\"disposition.classification.callable.person\": {\"reactionType\": \"transfer\"}}",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/AdditionalPropertiesModel"
+                    }
+                }
+            }
+        },
         "TestModel2": {
             "type": "object",
             "properties": {
@@ -97,7 +114,7 @@
                 }
             }
         },
-        "TestModel3": {
+        "UnUsedModel": {
             "type": "object",
             "properties": {
                 "id": {
@@ -107,7 +124,7 @@
                 }
             }
         },
-        "UnUsedModel": {
+        "AdditionalPropertiesModel": {
             "type": "object",
             "properties": {
                 "id": {
