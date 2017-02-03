@@ -1,4 +1,6 @@
-
+const fs = require('fs');
+const _ = require('lodash');
+const childProcess = require('child_process');
 
 
 
@@ -22,31 +24,148 @@ function SwaggerDiff() {
 
 
 
-SwaggerDiff.prototype.changes = {
-    "id": { // operation/model/path string
-        "impact": [ // [major|minor|point]
-            {
-                "name": "", // something identifying
-                "oldValue": "",
-                "newValue": "",
-                "description": "" // leave blank to follow auto-gen rules
-            }
-        ]
-    }
-      
-};
+SwaggerDiff.prototype.changes = {};
+SwaggerDiff.prototype.changeCount = 0;
 
 
 
 SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath) {
     // download or read files, call diffSwagger
+    var oldSwagger, newSwagger;
+
+    // Retrieve old swagger
+    if (fs.existsSync(oldSwaggerPath)) {
+        console.log(`Loading old swagger from disk: ${oldSwaggerPath}`);
+        oldSwagger = JSON.parse(fs.readFileSync(oldSwaggerPath, 'utf8'));
+    } else if (oldSwaggerPath.toLowerCase().startsWith('http')) {
+        console.log(`Downloading old swagger from: ${oldSwaggerPath}`);
+        oldSwagger = JSON.parse(downloadFile(oldSwaggerPath));
+    } else {
+        console.log(`WARNING: Invalid oldSwaggerPath: ${oldSwaggerPath}`);
+    }
+
+    console.log(`Old swagger length: ${JSON.stringify(oldSwagger).length}`);
+
+    // Retrieve new swagger
+    if (fs.existsSync(newSwaggerPath)) {
+        console.log(`Loading new swagger from disk: ${newSwaggerPath}`);
+        newSwagger = JSON.parse(fs.readFileSync(newSwaggerPath, 'utf8'));
+    } else if (newSwaggerPath.toLowerCase().startsWith('http')) {
+        console.log(`Downloading old swagger from: ${newSwaggerPath}`);
+        newSwagger = JSON.parse(downloadFile(newSwaggerPath));
+    } else {
+        console.log(`WARNING: Invalid newSwaggerPath: ${newSwaggerPath}`);
+    }
+
+    console.log(`New swagger length: ${JSON.stringify(newSwagger).length}`);
+
+
+    //fs.writeFileSync('oldSwagger.json', JSON.stringify(oldSwagger, null, 2));
+    //fs.writeFileSync('newSwagger.json', JSON.stringify(newSwagger, null, 2));
+    
+    this.diff(oldSwagger, newSwagger);
 };
 
 SwaggerDiff.prototype.diff = function(oldSwagger, newSwagger) {
+    console.log('Diffing swagger files...');
+    checkOperationsImpl(oldSwagger, newSwagger);
 
+    console.log(JSON.stringify(this.changes, null, 2));
+};
+
+SwaggerDiff.prototype.getReleaseNotes = function() {
+    var major = {};
+    var minor = {};
+    var point = {};
+
+    console.log(`Generating notes for ${this.changeCount} changes...`);
+
+    _.forEach(this.changes, function (changeItem, entity) {
+        if (changeItem.major) {
+            if (!major[entity]) 
+                major[entity] = [];
+
+            _.forEach(changeItem.major, function(changeDetail) {
+                major[entity].push(changeDetail.description);
+            });
+        }
+
+        if (changeItem.minor) {
+            if (!minor[entity]) 
+                minor[entity] = [];
+
+            _.forEach(changeItem.minor, function(changeDetail) {
+                minor[entity].push(changeDetail.description);
+            });
+        }
+
+        if (changeItem.point) {
+            if (!point[entity]) 
+                point[entity] = [];
+
+            _.forEach(changeItem.point, function(changeDetail) {
+                point[entity].push(changeDetail.description);
+            });
+        }
+    });
+
+    var output = '';
+    var lastKey = '';
+
+    if (_.keys(major).length > 0) {
+        output += '# Major Changes\n';
+        lastKey = '';
+        _.forEach(major, function(changes, key) {
+            if (lastKey != key) {
+                lastKey = key;
+                output += `\n**${key}**\n\n`;
+            }
+            _.forEach(changes, function(changeString) {
+                output += `* ${changeString}\n`;
+            });
+        });
+        output += '\n';
+    }
+
+    if (_.keys(minor).length > 0) {
+        output += '# Minor Changes\n';
+        lastKey = '';
+        _.forEach(minor, function(changes, key) {
+            if (lastKey != key) {
+                lastKey = key;
+                output += `\n**${key}**\n\n`;
+            }
+            _.forEach(changes, function(changeString) {
+                output += `* ${changeString}\n`;
+            });
+        });
+        output += '\n';
+    }
+
+    if (_.keys(point).length > 0) {
+        output += '# Point Changes\n';
+        lastKey = '';
+        _.forEach(point, function(changes, key) {
+            if (lastKey != key) {
+                lastKey = key;
+                output += `\n**${key}**\n\n`;
+            }
+            _.forEach(changes, function(changeString) {
+                output += `* ${changeString}\n`;
+            });
+        });
+        output += '\n';
+    }
+
+    return output;
 };
 
 
+
+function downloadFile(url) {
+    // Source: https://www.npmjs.com/package/download-file-sync
+    return childProcess.execFileSync('curl', ['--silent', '-L', url], {encoding: 'utf8'});
+}
 
 function addChange(id, key, location, impact, oldValue, newValue, description) {
     // Generate default description
@@ -60,31 +179,35 @@ function addChange(id, key, location, impact, oldValue, newValue, description) {
     }
 
     // Initialize
-    if (!changes[id])
-        changes[id] = {};
-    if (!changes[id][impact])
-        changes[id][impact] = [];
+    if (!self.changes[id])
+        self.changes[id] = {};
+    if (!self.changes[id][impact])
+        self.changes[id][impact] = [];
 
     // Add
-    changes[id][impact].push({
+    self.changes[id][impact].push({
         "key": key,
         "location": location,
         "oldValue": oldValue,
         "newValue": newValue,
         "description": description
     });
+
+    self.changeCount++;
 }
 
 function checkForChange(id, key, location, impact, property, oldObject, newObject, description) {
     var oldProperty = oldObject ? oldObject[property] : undefined;
     var newProperty = newObject ? newObject[property] : undefined;
 
+    //console.log(`Compare [${id}][${key}][${property}] -> ${oldProperty}, ${newProperty}`);
+
     // Have one but not the other, or properties aren't equal
     if ((!oldObject && newObject) || (oldObject && !newObject) || (oldProperty !== newProperty))
         addChange(id, key ? key : property, location, impact, oldProperty, newProperty, description);
 }
 
-function checkOperationsImplV2(oldSwagger, newSwagger) {
+function checkOperationsImpl(oldSwagger, newSwagger) {
     // Check for removed paths
     _.forEach(oldSwagger.paths, function(oldPath, pathKey) {
         var newPath = newSwagger.paths[pathKey];
@@ -104,16 +227,16 @@ function checkOperationsImplV2(oldSwagger, newSwagger) {
             _.forEach(oldPath, function(oldOperation, methodKey) {
                 var newOperation = newPath[methodKey];
                 if (!newOperation) {
-                    addChange(`${methodKey.toUpperCase()} pathKey`, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MAJOR, undefined, undefined, `Method  ${methodKey.toUpperCase()} for ${pathKey} was removed`);
+                    addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MAJOR, undefined, undefined, `Method  ${methodKey.toUpperCase()} for ${pathKey} was removed`);
                 }
             });
 
             // Check for changed and added operations
-            _.forEach(oldPath, function(newOperation, methodKey) {
+            _.forEach(newPath, function(newOperation, methodKey) {
                 var oldOperation = oldPath[methodKey];
                 if (!oldOperation) {
                     // Operation was added
-                    addChange(`${methodKey.toUpperCase()} pathKey`, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MINOR, undefined, undefined, `Method  ${methodKey.toUpperCase()} for ${pathKey} was added`);
+                    addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MINOR, undefined, undefined, `Method  ${methodKey.toUpperCase()} for ${pathKey} was added`);
                 } else {
                     var operationMethodAndPath = `${methodKey.toUpperCase()} ${pathKey}`;
 
@@ -121,9 +244,17 @@ function checkOperationsImplV2(oldSwagger, newSwagger) {
 
                     // Check operation properties
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'operationId', oldOperation, newOperation);
-                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'description', oldOperation, newOperation, 'description was changed');
-                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'summary', oldOperation, newOperation, 'summary was changed');
+                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'description', oldOperation, newOperation, 'Description was changed');
+                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'summary', oldOperation, newOperation, 'Summary was changed');
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'x-inin-method-name', oldOperation, newOperation);
+
+                    // Check for deprecated
+                    if (newOperation.deprecated === true && oldOperation.deprecated !== true) {
+                        addChange(operationMethodAndPath, 'deprecated', LOCATION_OPERATION, IMPACT_MAJOR, oldOperation.deprecated, newOperation.deprecated, `Has been deprecated`);
+                    } else if (newOperation.deprecated !== true && oldOperation.deprecated === true) {
+                        // This condition should never happen, but let's be thorough
+                        addChange(operationMethodAndPath, 'deprecated', LOCATION_OPERATION, IMPACT_MAJOR, oldOperation.deprecated, newOperation.deprecated, `Has been undeprecated`);
+                    }
 
 
 
@@ -142,22 +273,22 @@ function checkOperationsImplV2(oldSwagger, newSwagger) {
 
                     // Check for changed and added parameters
                     _.forEach(newParams, function(newParam) {
-                        var oldParam = oldParams[oldParam.name];
+                        var oldParam = oldParams[newParam.name];
                         if (!oldParam) {
                             // Parameter was added, major change if in path or required
                             var i = useSdkVersioning || newParam.in.toLowerCase() === 'path' || newParam.required === true;
-                            addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, i, undefined, newParam.name);
+                            addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, i ? IMPACT_MAJOR : IMPACT_MINOR, undefined, newParam.name);
                         } else {
                             checkForChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MAJOR, 'in', oldParam, newParam);
                             checkForChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MAJOR, 'type', oldParam, newParam);
-                            checkForChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_POINT, 'description', oldParam, newParam);
+                            checkForChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_POINT, 'description', oldParam, newParam, `Description was changed for parameter ${newParam.name}`);
 
                             // Major if made required
                             if (oldParam.required !== newParam.required) {
                                 if (newParam.required === true) {
-                                    addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MAJOR, oldParam.required, newParam.required, `parameter ${newParam.name} was made required`);
+                                    addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MAJOR, oldParam.required, newParam.required, `Parameter ${newParam.name} was made required`);
                                 } else {
-                                    addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MINOR, oldParam.required, newParam.required, `parameter ${newParam.name} was made optional`)
+                                    addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MINOR, oldParam.required, newParam.required, `Parameter ${newParam.name} was made optional`);
                                 }
                             }
                         }
@@ -176,6 +307,7 @@ function checkOperationsImplV2(oldSwagger, newSwagger) {
                     _.forEach(newOperation.responses, function(newResponse, newResponseCode) {
                         var oldResponse = oldOperation.responses[newResponseCode];
                         if (!oldResponse) {
+                            // Response was added
                             addChange(operationMethodAndPath, newResponseCode, LOCATION_RESPONSE, IMPACT_MINOR, undefined, newResponseCode);
                         } else {
                             checkForChange(operationMethodAndPath, newResponseCode, LOCATION_RESPONSE, IMPACT_POINT, 'description', oldResponse, newResponse);
@@ -252,4 +384,4 @@ function checkModelsImplV2(oldSwagger, newSwagger) {
 
 
 
-module.exports = new SwaggerDiff();
+var self = module.exports = new SwaggerDiff();
