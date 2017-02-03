@@ -24,6 +24,12 @@ function SwaggerDiff() {
 
 
 
+String.prototype.capitalizeFirstLetter = function() {
+    return this.charAt(0).toUpperCase() + this.slice(1);
+};
+
+
+
 SwaggerDiff.prototype.changes = {};
 SwaggerDiff.prototype.changeCount = 0;
 
@@ -73,7 +79,8 @@ SwaggerDiff.prototype.diff = function(oldSwagger, newSwagger) {
     console.log(JSON.stringify(this.changes, null, 2));
 };
 
-SwaggerDiff.prototype.getReleaseNotes = function() {
+SwaggerDiff.prototype.getMarkdownReleaseNotes = function() {
+    //TODO: use doT for templating?
     var major = {};
     var minor = {};
     var point = {};
@@ -171,11 +178,11 @@ function addChange(id, key, location, impact, oldValue, newValue, description) {
     // Generate default description
     if (!description) {
         if (!oldValue && newValue)
-            description = `${location} ${key} was added`;
+            description = `${location.capitalizeFirstLetter()} ${key} was added`;
         else if (oldValue && !newValue)
-            description = `${location} ${key} was removed`;
+            description = `${location.capitalizeFirstLetter()} ${key} was removed`;
         else
-            description = `${location} ${key} was changed from ${oldValue} to ${newValue}`;
+            description = `${location.capitalizeFirstLetter()} ${key} was changed from ${oldValue} to ${newValue}`;
     }
 
     // Initialize
@@ -220,14 +227,19 @@ function checkOperationsImpl(oldSwagger, newSwagger) {
     _.forEach(newSwagger.paths, function(newPath, pathKey) {
         var oldPath = oldSwagger.paths[pathKey];
         if (!oldPath) {
-            // path was added
-            addChange(pathKey, pathKey, LOCATION_PATH, IMPACT_MINOR, undefined, pathKey);
+            // Add note about the new path itself
+            addChange(pathKey, pathKey, LOCATION_PATH, IMPACT_MINOR, undefined, pathKey, `Path was added`);
+
+            // Add each operation
+            _.forEach(newPath, function(newOperation, methodKey) {
+                addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MINOR, undefined, pathKey);
+            });
         } else {
             // Check for removed operations
             _.forEach(oldPath, function(oldOperation, methodKey) {
                 var newOperation = newPath[methodKey];
                 if (!newOperation) {
-                    addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MAJOR, undefined, undefined, `Method  ${methodKey.toUpperCase()} for ${pathKey} was removed`);
+                    addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MAJOR, undefined, undefined);
                 }
             });
 
@@ -236,7 +248,7 @@ function checkOperationsImpl(oldSwagger, newSwagger) {
                 var oldOperation = oldPath[methodKey];
                 if (!oldOperation) {
                     // Operation was added
-                    addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MINOR, undefined, undefined, `Method  ${methodKey.toUpperCase()} for ${pathKey} was added`);
+                    addChange(pathKey, methodKey.toUpperCase(), LOCATION_OPERATION, IMPACT_MINOR, undefined, undefined);
                 } else {
                     var operationMethodAndPath = `${methodKey.toUpperCase()} ${pathKey}`;
 
@@ -246,7 +258,7 @@ function checkOperationsImpl(oldSwagger, newSwagger) {
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'operationId', oldOperation, newOperation);
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'description', oldOperation, newOperation, 'Description was changed');
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'summary', oldOperation, newOperation, 'Summary was changed');
-                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'x-inin-method-name', oldOperation, newOperation);
+                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'x-inin-method-name', oldOperation, newOperation);
 
                     // Check for deprecated
                     if (newOperation.deprecated === true && oldOperation.deprecated !== true) {
@@ -311,7 +323,7 @@ function checkOperationsImpl(oldSwagger, newSwagger) {
                             addChange(operationMethodAndPath, newResponseCode, LOCATION_RESPONSE, IMPACT_MINOR, undefined, newResponseCode);
                         } else {
                             checkForChange(operationMethodAndPath, newResponseCode, LOCATION_RESPONSE, IMPACT_POINT, 'description', oldResponse, newResponse);
-                            checkForChange(operationMethodAndPath, newResponseCode, LOCATION_RESPONSE, IMPACT_POINT, '$ref', oldResponse.schema, newResponse.schema);
+                            checkForChange(operationMethodAndPath, newResponseCode, LOCATION_RESPONSE, IMPACT_MAJOR, '$ref', oldResponse.schema, newResponse.schema);
                         }
                     });
 
