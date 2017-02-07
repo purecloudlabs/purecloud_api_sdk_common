@@ -170,6 +170,37 @@ SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
     return compiledTemplate(defs);
 };
 
+SwaggerDiff.prototype.incrementVersion = function(version) {
+    // Major
+    if (_.find(this.changes, function(changeGroup) {
+        return changeGroup[IMPACT_MAJOR] ? changeGroup[IMPACT_MAJOR].length > 0 : false;
+    })) {
+        version.major++;
+        version.minor = 0;
+        version.point = 0;
+        return version;
+    }
+
+    // Minor
+    if (_.find(this.changes, function(changeGroup) {
+        return changeGroup[IMPACT_MINOR] ? changeGroup[IMPACT_MINOR].length > 0 : false;
+    })) {
+        version.minor++;
+        version.point = 0;
+        return version;
+    }
+
+    // Point
+    if (_.find(this.changes, function(changeGroup) {
+        return changeGroup[IMPACT_POINT] ? changeGroup[IMPACT_POINT].length > 0 : false;
+    })) {
+        version.point++;
+        return version;
+    }
+
+    return version;
+};
+
 
 /* EXPORT MODULE */
 
