@@ -17,8 +17,6 @@ const LOCATION_MODEL = 'model';
 const LOCATION_PROPERTY = 'property';
 const LOCATION_PATH = 'path';
 
-var useSdkVersioning = false;
-
 
 /* TYPE EXTENSIONS */
 
@@ -43,6 +41,8 @@ function SwaggerDiff() {
 SwaggerDiff.prototype.changes = {};
 SwaggerDiff.prototype.changeCount = 0;
 SwaggerDiff.prototype.swaggerInfo = {};
+// When [true], considers certain changes to be major changes instead of minor because they're breaking for SDKs
+SwaggerDiff.prototype.useSdkVersioning = false;
 
 
 /* PUBLIC FUNCTIONS */
@@ -300,7 +300,7 @@ function checkOperations(oldSwagger, newSwagger) {
                         var oldParam = oldParams[newParam.name];
                         if (!oldParam) {
                             // Parameter was added, major change if in path or required
-                            var i = useSdkVersioning || newParam.in.toLowerCase() === 'path' || newParam.required === true;
+                            var i = self.useSdkVersioning || newParam.in.toLowerCase() === 'path' || newParam.required === true;
                             addChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, i ? IMPACT_MAJOR : IMPACT_MINOR, undefined, newParam.name);
                         } else {
                             checkForChange(operationMethodAndPath, newParam.name, LOCATION_PARAMETER, IMPACT_MAJOR, 'in', oldParam, newParam);
@@ -411,7 +411,7 @@ function checkModels(oldSwagger, newSwagger) {
                     if (!type)
                         type = newProperty['$ref'] ? newProperty['$ref'].replace('#/definitions/', '') : undefined;
 
-                    addChange(modelKey, propertyKey, LOCATION_PROPERTY, useSdkVersioning ? IMPACT_MAJOR : IMPACT_MINOR, undefined, type);
+                    addChange(modelKey, propertyKey, LOCATION_PROPERTY, self.useSdkVersioning ? IMPACT_MAJOR : IMPACT_MINOR, undefined, type);
                 } else {
                     /*
                     checkForChange(modelKey, propertyKey, LOCATION_PROPERTY, IMPACT_MAJOR, 'type', oldProperty, newProperty);
@@ -428,7 +428,7 @@ function checkModels(oldSwagger, newSwagger) {
                     }
                     if (oldEnums && !newEnums) {
                         // Not an enum anymore
-                        addChange(modelKey, propertyKey, LOCATION_PROPERTY, useSdkVersioning ? IMPACT_MINOR : IMPACT_MINOR, oldEnums, newEnums, `Values are no longer constrained by enum members`);
+                        addChange(modelKey, propertyKey, LOCATION_PROPERTY, self.useSdkVersioning ? IMPACT_MINOR : IMPACT_MINOR, oldEnums, newEnums, `Values are no longer constrained by enum members`);
                     }
                     if (oldEnums && newEnums) {
                         // Removed enum values
