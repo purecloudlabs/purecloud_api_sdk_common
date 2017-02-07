@@ -1,6 +1,7 @@
 const fs = require('fs');
 const _ = require('lodash');
 const childProcess = require('child_process');
+const dot = require('dot');
 
 
 /* PRIVATE VARS */
@@ -25,11 +26,15 @@ String.prototype.capitalizeFirstLetter = function() {
     return this.charAt(0).toUpperCase() + this.slice(1);
 };
 
+Array.prototype.pushApply = function(arr) {
+    this.push.apply(this, arr);
+};
+
 
 /* CONSTRUCTOR */
 
 function SwaggerDiff() {
-
+    dot.templateSettings.strip = false;
 }
 
 
@@ -37,6 +42,7 @@ function SwaggerDiff() {
 
 SwaggerDiff.prototype.changes = {};
 SwaggerDiff.prototype.changeCount = 0;
+SwaggerDiff.prototype.swaggerInfo = {};
 
 
 /* PUBLIC FUNCTIONS */
@@ -76,102 +82,92 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath) {
     //fs.writeFileSync('newSwagger.json', JSON.stringify(newSwagger, null, 2));
     
     this.diff(oldSwagger, newSwagger);
+
+    this.swaggerInfo = newSwagger.info;
+    this.swaggerInfo.swagger = newSwagger.swagger;
+    this.swaggerInfo.host = newSwagger.host;
 };
 
 SwaggerDiff.prototype.diff = function(oldSwagger, newSwagger) {
     console.log('Diffing swagger files...');
     checkOperations(oldSwagger, newSwagger);
     checkModels(oldSwagger, newSwagger);
+    console.log(`Swagger diff complete. Found ${this.changeCount} changes.`);
 
-    console.log(JSON.stringify(this.changes, null, 2));
+    //console.log(JSON.stringify(this.changes, null, 2));
 };
 
-SwaggerDiff.prototype.generateMarkdownReleaseNotes = function() {
-    //TODO: use doT for templating?
-    var major = {};
-    var minor = {};
-    var point = {};
+SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
+    var changesObject = {
+        'major': {},
+        'minor': {},
+        'point': {}
+    };
 
-    console.log(`Generating notes for ${this.changeCount} changes...`);
-
+    // Organize data for templating
     _.forEach(this.changes, function (changeItem, entity) {
         if (changeItem.major) {
-            if (!major[entity]) 
-                major[entity] = [];
+            if (!changesObject.major[entity]) 
+                changesObject.major[entity] = { key: entity, changes: [] };
 
-            _.forEach(changeItem.major, function(changeDetail) {
-                major[entity].push(changeDetail.description);
-            });
+            changesObject.major[entity].changes.pushApply(changeItem.major);
         }
 
         if (changeItem.minor) {
-            if (!minor[entity]) 
-                minor[entity] = [];
+            if (!changesObject.minor[entity]) 
+                changesObject.minor[entity] = { key: entity, changes: [] };
 
-            _.forEach(changeItem.minor, function(changeDetail) {
-                minor[entity].push(changeDetail.description);
-            });
+            changesObject.minor[entity].changes.pushApply(changeItem.minor);
         }
 
         if (changeItem.point) {
-            if (!point[entity]) 
-                point[entity] = [];
+            if (!changesObject.point[entity]) 
+                changesObject.point[entity] = { key: entity, changes: [] };
 
-            _.forEach(changeItem.point, function(changeDetail) {
-                point[entity].push(changeDetail.description);
-            });
+            changesObject.point[entity].changes.pushApply(changeItem.point);
         }
     });
 
-    var output = '';
-    var lastKey = '';
-
-    if (_.keys(major).length > 0) {
-        output += '# Major Changes\n';
-        lastKey = '';
-        _.forEach(major, function(changes, key) {
-            if (lastKey != key) {
-                lastKey = key;
-                output += `\n**${key}**\n\n`;
-            }
-            _.forEach(changes, function(changeString) {
-                output += `* ${changeString}\n`;
-            });
+    // Calculate metadata
+    var changesData = {
+        'majorCount': 0,
+        'minorCount': 0,
+        'pointCount': 0,
+    };
+    _.forOwn(changesObject, function(impactGroup, key) {
+        _.forOwn(impactGroup, function(changeGroup) {
+            changesData[`${key}Count`] += changeGroup.changes.length;
+            changeGroup.changeCount = changeGroup.changes.length;
         });
-        output += '\n';
+    });
+
+    // Flatten to arrays
+    changesData.major = _.values(changesObject.major);
+    changesData.minor = _.values(changesObject.minor);
+    changesData.point = _.values(changesObject.point);
+
+    //console.log(JSON.stringify(changesData, null, 2));
+
+    // Load template
+    var templateString = template;
+    if (fs.existsSync(template) === true) {
+        templateString = fs.readFileSync(template, 'utf8');
     }
 
-    if (_.keys(minor).length > 0) {
-        output += '# Minor Changes\n';
-        lastKey = '';
-        _.forEach(minor, function(changes, key) {
-            if (lastKey != key) {
-                lastKey = key;
-                output += `\n**${key}**\n\n`;
-            }
-            _.forEach(changes, function(changeString) {
-                output += `* ${changeString}\n`;
-            });
-        });
-        output += '\n';
-    }
+    // Construct template data definition object
+    var defs = {
+        changes: changesData,
+        swaggerInfo: this.swaggerInfo,
+        data: data
+    };
 
-    if (_.keys(point).length > 0) {
-        output += '# Point Changes\n';
-        lastKey = '';
-        _.forEach(point, function(changes, key) {
-            if (lastKey != key) {
-                lastKey = key;
-                output += `\n**${key}**\n\n`;
-            }
-            _.forEach(changes, function(changeString) {
-                output += `* ${changeString}\n`;
-            });
-        });
-        output += '\n';
-    }
+    // Compile template
+    console.log('Compiling template...');
+    var compiledTemplate = dot.template(templateString, null, defs);
 
-    return output;
+    // Execute template
+    console.log('Executing template...');
+    return compiledTemplate(defs);
 };
 
 
@@ -206,6 +202,8 @@ function addChange(id, key, location, impact, oldValue, newValue, description) {
 
     // Add
     self.changes[id][impact].push({
+        "parent": id,
+        "impact": impact,
         "key": key,
         "location": location,
         "oldValue": oldValue,
