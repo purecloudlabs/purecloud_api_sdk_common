@@ -1,0 +1,73 @@
+{
+	"name": "Java SDK",
+	"version": {
+		"major": 0,
+		"minor": 0,
+		"point": 0,
+		"prerelease": ""
+	},
+	"envVars": {
+		"key": "value"
+	},
+	"settings": {
+		"sdkRepo": {
+			"repo": "https://github.com/MyPureCloud/purecloud_api_sdk_java",
+			"branch": "sdkv1"
+		},
+		"logLevel": "debug",
+		"extensionsDestination": "${SDK_REPO}/build/src/main/java/com/mypurecloud/sdk",
+		"swagger": {
+			"language": "purecloudjava",
+			"swaggerCodegenJarPath": "/swagger-codegen/modules/swagger-codegen-cli/target/swagger-codegen-cli.jar",
+			"oldSwaggerPath": "${SDK_REPO}/swagger.json",
+			"newSwaggerPath": "https://api.mypurecloud.com/api/v2/docs/swagger",
+			"saveNewSwaggerPath": "${SDK_REPO}/swagger.json",
+			"extraGeneratorOptions"
+		}
+	},
+	"stageSettings":{
+		"prebuild": {
+			"preRunScripts": [
+				{
+					"type": "node",
+					"path": "test.js",
+					"args": []
+				}
+			],
+			"postRunScripts": [
+				{
+					"type": "node",
+					"path": "test.js",
+					"args": []
+				}
+			]
+		},
+		"build": {
+			"swaggerCodegenConfigFile": "${SDK_TEMP}/config.json -- built by prebuild script",
+			"preRunScripts": [
+				{
+					"type": "node",
+					"path": "test.js",
+					"args": []
+				}
+			],
+			"compileScripts": [
+				{
+					"type": "shell",
+					"path": "compile.sh",
+					"args": []
+				}
+			],
+			"postRunScripts": [
+				{
+					"type": "node",
+					"path": "test.js",
+					"args": []
+				}
+			]
+		},
+		"postbuild": {
+			
+		}
+	}
+}
