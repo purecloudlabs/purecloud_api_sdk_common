@@ -43,21 +43,20 @@ SwaggerDiff.prototype.changeCount = 0;
 SwaggerDiff.prototype.swaggerInfo = {};
 // When [true], considers certain changes to be major changes instead of minor because they're breaking for SDKs
 SwaggerDiff.prototype.useSdkVersioning = false;
+SwaggerDiff.prototype.oldSwagger = {};
+SwaggerDiff.prototype.newSwagger = {};
 
 
 /* PUBLIC FUNCTIONS */
 
-SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath) {
-    // download or read files, call diffSwagger
-    var oldSwagger, newSwagger;
-
+SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, saveOldSwaggerPath, saveNewSwaggerPath) {
     // Retrieve old swagger
     if (fs.existsSync(oldSwaggerPath)) {
         console.log(`Loading old swagger from disk: ${oldSwaggerPath}`);
-        oldSwagger = JSON.parse(fs.readFileSync(oldSwaggerPath, 'utf8'));
+        this.oldSwagger = JSON.parse(fs.readFileSync(oldSwaggerPath, 'utf8'));
     } else if (oldSwaggerPath.toLowerCase().startsWith('http')) {
         console.log(`Downloading old swagger from: ${oldSwaggerPath}`);
-        oldSwagger = JSON.parse(downloadFile(oldSwaggerPath));
+        this.oldSwagger = JSON.parse(downloadFile(oldSwaggerPath));
     } else {
         console.log(`WARNING: Invalid oldSwaggerPath: ${oldSwaggerPath}`);
     }
@@ -67,25 +66,33 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath) {
     // Retrieve new swagger
     if (fs.existsSync(newSwaggerPath)) {
         console.log(`Loading new swagger from disk: ${newSwaggerPath}`);
-        newSwagger = JSON.parse(fs.readFileSync(newSwaggerPath, 'utf8'));
+        this.newSwagger = JSON.parse(fs.readFileSync(newSwaggerPath, 'utf8'));
     } else if (newSwaggerPath.toLowerCase().startsWith('http')) {
         console.log(`Downloading old swagger from: ${newSwaggerPath}`);
-        newSwagger = JSON.parse(downloadFile(newSwaggerPath));
+        this.newSwagger = JSON.parse(downloadFile(newSwaggerPath));
     } else {
         console.log(`WARNING: Invalid newSwaggerPath: ${newSwaggerPath}`);
     }
 
     console.log(`New swagger length: ${JSON.stringify(newSwagger).length}`);
 
-
-    //fs.writeFileSync('oldSwagger.json', JSON.stringify(oldSwagger, null, 2));
-    //fs.writeFileSync('newSwagger.json', JSON.stringify(newSwagger, null, 2));
+    // Save files to disk
+    if (saveOldSwaggerPath) {
+        console.log(`Writing old swagger to ${saveOldSwaggerPath}`);
+        fs.writeFileSync(saveOldSwaggerPath, JSON.stringify(oldSwagger));
+    }
+    if (saveNewSwaggerPath) {
+        console.log(`Writing new swagger to ${saveNewSwaggerPath}`);
+        fs.writeFileSync(saveNewSwaggerPath, JSON.stringify(newSwagger));
+    }
     
-    this.diff(oldSwagger, newSwagger);
+    // Diff swaggers
+    this.diff(this.oldSwagger, this.newSwagger);
 
-    this.swaggerInfo = newSwagger.info;
-    this.swaggerInfo.swagger = newSwagger.swagger;
-    this.swaggerInfo.host = newSwagger.host;
+    // Set instance metadata
+    this.swaggerInfo = this.newSwagger.info;
+    this.swaggerInfo.swagger = this.newSwagger.swagger;
+    this.swaggerInfo.host = this.newSwagger.host;
 };
 
 SwaggerDiff.prototype.diff = function(oldSwagger, newSwagger) {
@@ -199,6 +206,11 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
     }
 
     return version;
+};
+
+SwaggerDiff.prototype.stringifyVersion = function(version) {
+    return `${version.major}.${version.minor}.${version.point}` + 
+        (version.prerelease && version.prerelease.length > 0 ? `-${version.prerelease}` : '');
 };
 
 
