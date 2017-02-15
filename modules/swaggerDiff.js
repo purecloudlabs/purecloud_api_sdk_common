@@ -61,7 +61,7 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, save
         console.log(`WARNING: Invalid oldSwaggerPath: ${oldSwaggerPath}`);
     }
 
-    console.log(`Old swagger length: ${JSON.stringify(oldSwagger).length}`);
+    console.log(`Old swagger length: ${JSON.stringify(this.oldSwagger).length}`);
 
     // Retrieve new swagger
     if (fs.existsSync(newSwaggerPath)) {
@@ -74,16 +74,16 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, save
         console.log(`WARNING: Invalid newSwaggerPath: ${newSwaggerPath}`);
     }
 
-    console.log(`New swagger length: ${JSON.stringify(newSwagger).length}`);
+    console.log(`New swagger length: ${JSON.stringify(this.newSwagger).length}`);
 
     // Save files to disk
     if (saveOldSwaggerPath) {
         console.log(`Writing old swagger to ${saveOldSwaggerPath}`);
-        fs.writeFileSync(saveOldSwaggerPath, JSON.stringify(oldSwagger));
+        fs.writeFileSync(saveOldSwaggerPath, JSON.stringify(this.oldSwagger));
     }
     if (saveNewSwaggerPath) {
         console.log(`Writing new swagger to ${saveNewSwaggerPath}`);
-        fs.writeFileSync(saveNewSwaggerPath, JSON.stringify(newSwagger));
+        fs.writeFileSync(saveNewSwaggerPath, JSON.stringify(this.newSwagger));
     }
     
     // Diff swaggers

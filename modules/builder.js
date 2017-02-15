@@ -2,60 +2,84 @@ const _ = require('lodash');
 const archiver = require('archiver');
 const childProcess = require('child_process');
 const fs = require('fs-extra');
-const git = require('git');
-const log = require('winston');
+const Winston = require('winston');
 const path = require('path');
 const Q = require('q');
 
-const swaggerDiff = require('./modules/swaggerDiff');
+const swaggerDiff = require('./swaggerDiff');
+const git = require('./gitModule');
 
 
 /* PRIVATE VARS */
 
 var newSwaggerTempFile = '';
 var releaseNoteTemplatePath = './resources/templates/releaseNoteSummary.md';
+var log;
 
 
 /* CONSTRUCTOR */
 
 function Builder(config) {
-	this.config = config;
+	try {
+		this.config = config;
+		self = this;
 
-	// Checketh thyself before thou wrecketh thyself
-	maybeInit(this, 'config', {});
-	maybeInit(this.config, 'version', {major:0,minor:0,point:0,prerelease:''}, 'Version not set. Initializing to 0.0.0');
-	maybeInit(this.config, 'settings', {});
-	maybeInit(this.config, 'stageSettings', {});
-	maybeInit(this.config.stageSettings, 'prebuild', {});
-	maybeInit(this.config.stageSettings, 'build', {});
-	maybeInit(this.config.stageSettings, 'postbuild', {});
+		// Checketh thyself before thou wrecketh thyself
+		maybeInit(this, 'config', {});
+		maybeInit(this.config, 'version', {major:0,minor:0,point:0,prerelease:''}, 'Version not set. Initializing to 0.0.0');
+		maybeInit(this.config, 'settings', {});
+		maybeInit(this.config.settings, 'swagger', {});
+		maybeInit(this.config, 'stageSettings', {});
+		maybeInit(this.config.stageSettings, 'prebuild', {});
+		maybeInit(this.config.stageSettings, 'build', {});
+		maybeInit(this.config.stageSettings, 'postbuild', {});
 
-	// Check for required settings
-	checkAndThrow(this.config.settings, 'sdkRepo');
-	checkAndThrow(this.config.settings, 'oldSwaggerPath');
-	checkAndThrow(this.config.settings, 'newSwaggerPath');
+		// Check for required settings
+		checkAndThrow(this.config.settings, 'sdkRepo');
+		checkAndThrow(this.config.settings.swagger, 'oldSwaggerPath');
+		checkAndThrow(this.config.settings.swagger, 'newSwaggerPath');
 
-	// https://github.com/winstonjs/winston#logging-levels
-	if (this.config.logLevel) {
-		log.info(`Setting log level to ${this.config.logLevel}`);
-		log.level = this.config.logLevel;
+		// https://github.com/winstonjs/winston#logging-levels
+		// silly > debug > verbose > info > warn > error
+		var logLevel = this.config.settings.logLevel ? this.config.settings.logLevel : 'debug';
+		log = new Winston.Logger({
+		    transports: [
+		        new Winston.transports.Console({
+		            level: logLevel,
+		            handleExceptions: true,
+		            json: false,
+		            colorize: true
+		        })
+		    ]
+		});
+		console.log(`Log level is ${logLevel}`);
+
+		// Set env vars
+		setEnv('SDK_REPO', path.join('./output', this.config.settings.swagger.language));
+		fs.mkdirp(getEnv('SDK_REPO'));
+		setEnv('SDK_TEMP', path.join('./temp', this.config.settings.swagger.language));
+		fs.mkdirp(getEnv('SDK_TEMP'));
+
+		// Load env vars from config
+		_.forOwn(this.config.envVars, (value, key) => setEnv(key, value));
+
+		// Resolve env vars in config
+		resolveEnvVars(this.config);
+		if (this.config.settings.debugConfig === true)
+			log.debug('Config file: \n' + JSON.stringify(this.config,null,2));
+
+		// Initialize instance vars
+		var resourceRoot = `./resources/sdk/${this.config.settings.swagger.language}/`;
+		this.resourcePaths = {
+			extensions: path.join(resourceRoot, 'extensions'),
+			scripts: path.join(resourceRoot, 'scripts'),
+			templates: path.join(resourceRoot, 'templates')
+		};
+		newSwaggerTempFile = path.join(getEnv('SDK_TEMP'), 'newSwagger.json');
+	} catch(err) {
+		log.error(err);
+		throw err;
 	}
-
-	// Set env vars
-	env('SDK_REPO', 'some/folder/path');
-	env('SDK_TEMP', 'some/folder/path');
-
-	// Load env vars from config
-	_.forOwn(this.config.envVars, (value, key) => env(key, value));
-
-	// Initialize instance vars
-	var resourceRoot = `./resources/sdk/${self.config.settings.swagger.language}/`;
-	this.resourcePaths = {
-		extensions: path.join(resourceRoot, 'extensions'),
-		scripts: path.join(resourceRoot, 'scripts'),
-		templates: path.join(resourceRoot, 'templates')
-	};
-	newSwaggerTempFile = path.join(env('SDK_TEMP'), 'newSwagger.json');
 }
 
 
@@ -68,13 +92,27 @@ Builder.prototype.repository = {};
 /* PUBLIC FUNCTIONS */
 
 Builder.prototype.fullBuild = function() {
+	var deferred = Q.defer();
 
+	log.info('Full build initiated!');
+
+	this.prebuild()
+		.then(() => this.build())
+		.then(() => this.postbuild())
+		.then(() => log.info('Full build complete'))
+		.then(() => deferred.resolve())
+		.catch((err) => deferred.reject(err));
+
+	return deferred.promise;
 };
 
 Builder.prototype.prebuild = function() {
 	var deferred = Q.defer();
 
+	log.info('Initiating stage: prebuild');
+
 	prebuildImpl()
+		.then(() => log.info('Stage complete: prebuild'))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -84,7 +122,10 @@ Builder.prototype.prebuild = function() {
 Builder.prototype.build = function() {
 	var deferred = Q.defer();
 
+	log.info('Initiating stage: build');
+
 	buildImpl()
+		.then(() => log.info('Stage complete: build'))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -98,7 +139,7 @@ Builder.prototype.postbuild = function() {
 
 /* EXPORT MODULE */
 
-self = module.exports = Builder;
+module.exports = Builder;
 
 
 /* IMPL FUNCTIONS */
@@ -106,16 +147,14 @@ self = module.exports = Builder;
 function prebuildImpl() {
 	var deferred = Q.defer();
 
+	//log.debug(self);
+
 	// Pre-run scripts
-	executeScripts(config.stageSettings.prebuild.preRunScripts, 'custom prebuild pre-run');
+	executeScripts(self.config.stageSettings.prebuild.preRunScripts, 'custom prebuild pre-run');
 
 	// Prepare for repo clone
 	var sdkRepo = self.config.settings.sdkRepo;
 	var repo, branch;
-
-	if (!sdkRepo) {
-		throw new Exception('sdkRepo property was not set! Aborting!');
-	}
 
 	// Check for basic or extended config
 	if (typeof(sdkRepo) == 'string') {
@@ -126,7 +165,9 @@ function prebuildImpl() {
 	}
 
 	// Clone repo
-	git.clone(repo, branch, env('SDK_REPO'))
+	log.info(`Cloning ${repo} (${branch}) to ${getEnv('SDK_REPO')}`);
+	fs.removeSync(getEnv('SDK_REPO'));
+	git.clone(repo, branch, getEnv('SDK_REPO'))
 		.then(function(repository) {
 			self.repository = repository;
 		})
@@ -158,7 +199,7 @@ function prebuildImpl() {
 			log.info('Generating release notes...');
 			self.releaseNotes = swaggerDiff.generateReleaseNotes(releaseNoteTemplatePath);
 		})
-		.then(() => executeScripts(config.stageSettings.prebuild.postRunScripts, 'custom prebuild post-run'))
+		.then(() => executeScripts(self.config.stageSettings.prebuild.postRunScripts, 'custom prebuild post-run'))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -169,16 +210,16 @@ function buildImpl() {
 	var deferred = Q.defer();
 
 	// Pre-run scripts
-	executeScripts(config.stageSettings.build.preRunScripts, 'custom build pre-run');
+	executeScripts(self.config.stageSettings.build.preRunScripts, 'custom build pre-run');
 
-	var outputDir = path.join(env('SDK_REPO'), 'build');
+	var outputDir = path.join(getEnv('SDK_REPO'), 'build');
 	log.debug(`SDK build dir -> ${outputDir}`);
 	fs.emptyDirSync(outputDir);
 
 
 	var command = '';
 	// Java command and options
-	command += `java ${env('JAVA_OPTS')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
+	command += `java ${getEnv('JAVA_OPTS')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
 	// Swagger-codegen jar file
 	command += `-jar ${self.config.settings.swaggerCodegenJarPath} `;
 	// Swagger-codegen options
@@ -200,16 +241,16 @@ function buildImpl() {
 	executeScripts(this.config.stageSettings.build.compileScripts, 'compile');
 
 	log.info('Copying readme...');
-	fs.createReadStream(path.join(env('SDK_REPO'), 'README.md'))
-		.pipe(fs.createWriteStream(path.join(env('SDK_REPO'), 'build/docs/index.md')));
+	fs.createReadStream(path.join(getEnv('SDK_REPO'), 'README.md'))
+		.pipe(fs.createWriteStream(path.join(getEnv('SDK_REPO'), 'build/docs/index.md')));
 
 	log.info('Zipping docs...');
-	zip(path.join(outputDir, 'docs'), path.join(env('SDK_TEMP'), 'docs.zip'))
+	zip(path.join(outputDir, 'docs'), path.join(getEnv('SDK_TEMP'), 'docs.zip'))
 		.then(function() {
 			log.info('Committing SDK repo...');
 			// TODO: commit to git
 		})
-		.then(() => executeScripts(config.stageSettings.build.postRunScripts, 'custom build post-run'))
+		.then(() => executeScripts(self.config.stageSettings.build.postRunScripts, 'custom build post-run'))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -227,27 +268,39 @@ function executeScripts(scripts, phase) {
 
 function executeScript(script) {
 	var code = -100;
-	var args = script.args ? script.args : [];
-	args.push(script.path);
 
-	log.info(`Executing ${script.type} script as: ${args}`);
+	try {
+		var args = script.args ? script.args : [];
+		args.unshift(script.path);
 
-	switch (script.type.toLowerCase()) {
-		case 'node': {
-			code = childProcess.execFileSync('node', args);
-			break;
+		log.verbose(`Executing ${script.type} script as: ${args}`);
+
+		switch (script.type.toLowerCase()) {
+			case 'node': {
+				code = childProcess.execFileSync('node', args, {stdio:'inherit'});
+				break;
+			}
+			case 'shell': {
+				code = childProcess.execFileSync('sh', args);
+				break;
+			}
+			default: {
+				log.warn(`UNSUPPORTED SCRIPT TYPE: ${script.type}`);
+				return 1;
+			}
 		}
-		case 'shell': {
-			code = childProcess.execFileSync('sh', args);
-			break;
-		}
-		default: {
-			console.log(`UNSUPPORTED SCRIPT TYPE: ${script.type}`);
-			return 1;
-		}
+
+		if (!code || code === null)
+			code = 0;
+	} catch (err) {
+		if (err.error)
+			log.error(err.error);
+
+		if (err.status)
+			code = err.status;
 	}
 	
-	log.debug(`Process completed with return code ${code}`);
+	log.verbose(`Script completed with return code ${code}`);
 	return code;
 }
 
@@ -256,6 +309,10 @@ function lenSafe(arr) {
 }
 
 function maybeInit(haystack, needle, defaultValue, warning) {
+	if (!haystack) {
+		log.warn('Haystack was undefined!');
+		return;
+	}
 	if (!haystack[needle]) {
 		if (warning) 
 			log.warn(warning);
@@ -266,17 +323,31 @@ function maybeInit(haystack, needle, defaultValue, warning) {
 
 function checkAndThrow(haystack, needle, message) {
 	if (!haystack[needle] || haystack[needle] === '')
-		throw new Exception(message ? message : `${needle} must be set!`);
+		throw new Error(message ? message : `${needle} must be set!`);
 }
 
-function env(varname) {
-	log.debug(`ENV: ${varname}->${process.env[varname]}`);
-	return process.env[varname];
+function getEnv(varname) {
+	varname = varname.trim();
+	log.silly(`ENV: ${varname}->${process.env[varname]}`);
+	return process.env[varname] ? process.env[varname] : '';
 }
 
-function env(varname, value) {
-	log.debug(`ENV: ${key}=${value}`);
+function setEnv(varname, value) {
+	varname = varname.trim();
+	log.silly(`ENV: ${varname}=${value}`);
 	process.env[varname] = value;
+}
+
+function resolveEnvVars(config) {
+	_.forOwn(config, function(value, key) {
+		if (typeof(value) == 'string') {
+			config[key] = value.replace(/\$\{(.+?)\}/gi, function(match, p1, offset, string) {
+				return getEnv(p1);
+			});
+		} else {
+			resolveEnvVars(value);
+		}
+	});
 }
 
 function zip(inputDir, outputPath) {
