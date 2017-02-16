@@ -7,21 +7,25 @@
     "prerelease": ""
   },
   "envVars": {
-    "key": "value"
+    "SDK_RESOURCE_DIR": "./resources/sdk/purecloudjava",
+    "SDK_SCRIPTS_DIR": "./resources/sdk/purecloudjava/scripts"
   },
   "settings": {
     "sdkRepo": {
-      "repo": "https://github.com/MyPureCloud/purecloud_api_sdk_java",
+      "repo": "https://github.com/MyPureCloud/purecloud_api_sdk_java.git",
       "branch": "sdkv1"
     },
     "logLevel": "debug",
     "extensionsDestination": "${SDK_REPO}/build/src/main/java/com/mypurecloud/sdk",
     "swagger": {
-      "language": "purecloudjava",
-      "swaggerCodegenJarPath": "/swagger-codegen/modules/swagger-codegen-cli/target/swagger-codegen-cli.jar",
       "oldSwaggerPath": "${SDK_REPO}/swagger.json",
       "newSwaggerPath": "https://api.mypurecloud.com/api/v2/docs/swagger",
-      "saveNewSwaggerPath": "${SDK_REPO}/swagger.json",
+      "saveNewSwaggerPath": "${SDK_REPO}/swagger.json"
+    },
+    "swaggerCodegen": {
+      "language": "purecloudjava",
+      "jarPath": "/git/swagger-codegen/modules/swagger-codegen-cli/target/swagger-codegen-cli.jar",
+      "configFile": "${SDK_TEMP}/config.json",
       "extraGeneratorOptions": []
     },
     "debugConfig": false
@@ -31,7 +35,7 @@
       "preRunScripts": [
         {
           "type": "node",
-          "path": "./resources/sdk/purecloudjava/scripts/test.js",
+          "path": "${SDK_SCRIPTS_DIR}/test.js",
           "args": [
           	"prebuild-prerun"
           ]
@@ -40,7 +44,7 @@
       "postRunScripts": [
         {
           "type": "node",
-          "path": "./resources/sdk/purecloudjava/scripts/test.js",
+          "path": "${SDK_SCRIPTS_DIR}/test.js",
           "args": [
           	"prebuild-postrun"
           ]
@@ -48,11 +52,10 @@
       ]
     },
     "build": {
-      "swaggerCodegenConfigFile": "${SDK_TEMP}/config.json -- built by prebuild script",
       "preRunScripts": [
         {
           "type": "node",
-          "path": "./resources/sdk/purecloudjava/scripts/test.js",
+          "path": "${SDK_SCRIPTS_DIR}/test.js",
           "args": [
           	"build-prerun"
           ]
@@ -61,14 +64,14 @@
       "compileScripts": [
         {
           "type": "shell",
-          "path": "compile.sh",
+          "path": "${SDK_SCRIPTS_DIR}/compile.sh",
           "args": []
         }
       ],
       "postRunScripts": [
         {
           "type": "node",
-          "path": "./resources/sdk/purecloudjava/scripts/test.js",
+          "path": "${SDK_SCRIPTS_DIR}/test.js",
           "args": [
           	"build-postrun"
           ]

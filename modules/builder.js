@@ -2,6 +2,7 @@ const _ = require('lodash');
 const archiver = require('archiver');
 const childProcess = require('child_process');
 const fs = require('fs-extra');
+const moment = require('moment-timezone');
 const Winston = require('winston');
 const path = require('path');
 const Q = require('q');
@@ -55,9 +56,9 @@ function Builder(config) {
 		console.log(`Log level is ${logLevel}`);
 
 		// Set env vars
-		setEnv('SDK_REPO', path.join('./output', this.config.settings.swagger.language));
+		setEnv('SDK_REPO', path.join('./output', this.config.settings.swaggerCodegen.language));
 		fs.mkdirp(getEnv('SDK_REPO'));
-		setEnv('SDK_TEMP', path.join('./temp', this.config.settings.swagger.language));
+		setEnv('SDK_TEMP', path.join('./temp', this.config.settings.swaggerCodegen.language));
 		fs.mkdirp(getEnv('SDK_TEMP'));
 
 		// Load env vars from config
@@ -69,7 +70,7 @@ function Builder(config) {
 			log.debug('Config file: \n' + JSON.stringify(this.config,null,2));
 
 		// Initialize instance vars
-		var resourceRoot = `./resources/sdk/${this.config.settings.swagger.language}/`;
+		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
 		this.resourcePaths = {
 			extensions: path.join(resourceRoot, 'extensions'),
 			scripts: path.join(resourceRoot, 'scripts'),
@@ -109,7 +110,9 @@ Builder.prototype.fullBuild = function() {
 Builder.prototype.prebuild = function() {
 	var deferred = Q.defer();
 
-	log.info('Initiating stage: prebuild');
+	log.info('===================');
+	log.info('= STAGE: prebuild =');
+	log.info('===================');
 
 	prebuildImpl()
 		.then(() => log.info('Stage complete: prebuild'))
@@ -122,7 +125,9 @@ Builder.prototype.prebuild = function() {
 Builder.prototype.build = function() {
 	var deferred = Q.defer();
 
-	log.info('Initiating stage: build');
+	log.info('================');
+	log.info('= STAGE: build =');
+	log.info('================');
 
 	buildImpl()
 		.then(() => log.info('Stage complete: build'))
@@ -165,10 +170,12 @@ function prebuildImpl() {
 	}
 
 	// Clone repo
+	var startTime = moment();
 	log.info(`Cloning ${repo} (${branch}) to ${getEnv('SDK_REPO')}`);
 	fs.removeSync(getEnv('SDK_REPO'));
 	git.clone(repo, branch, getEnv('SDK_REPO'))
 		.then(function(repository) {
+			log.debug(`Clone operation completed in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
 			self.repository = repository;
 		})
 		.then(function() {
@@ -221,17 +228,18 @@ function buildImpl() {
 	// Java command and options
 	command += `java ${getEnv('JAVA_OPTS')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
 	// Swagger-codegen jar file
-	command += `-jar ${self.config.settings.swaggerCodegenJarPath} `;
+	command += `-jar ${self.config.settings.swaggerCodegen.jarPath} `;
 	// Swagger-codegen options
 	command += `generate `;
 	command += `-i ${newSwaggerTempFile} `;
-	command += `-l ${self.config.settings.swagger.language} `;
+	command += `-l ${self.config.settings.swaggerCodegen.language} `;
 	command += `-o ${outputDir} `;
-	command += `-c ${self.config.stageSettings.build.swaggerCodegenConfigFile} `;
+	command += `-c ${self.config.settings.swaggerCodegen.configFile} `;
 	command += `-t ${self.resourcePaths.templates}`;
-	_.forOwn(self.config.settings.swagger.extraGeneratorOptions, (option) => command += ' ' + option);
+	_.forOwn(self.config.settings.swaggerCodegen.extraGeneratorOptions, (option) => command += ' ' + option);
 
 	log.info('Running swagger-codegen...');
+	log.debug(command);
 	var code = childProcess.execSync(command);
 
 	log.info('Copying extensions...');
@@ -268,12 +276,13 @@ function executeScripts(scripts, phase) {
 
 function executeScript(script) {
 	var code = -100;
+	var startTime = moment();
 
 	try {
 		var args = script.args ? script.args : [];
 		args.unshift(script.path);
 
-		log.verbose(`Executing ${script.type} script as: ${args}`);
+		log.verbose(`Executing ${script.type} script as: ${args.join(' ')}`);
 
 		switch (script.type.toLowerCase()) {
 			case 'node': {
@@ -281,7 +290,7 @@ function executeScript(script) {
 				break;
 			}
 			case 'shell': {
-				code = childProcess.execFileSync('sh', args);
+				code = childProcess.execFileSync('sh', args, {stdio:'inherit'});
 				break;
 			}
 			default: {
@@ -299,8 +308,8 @@ function executeScript(script) {
 		if (err.status)
 			code = err.status;
 	}
-	
-	log.verbose(`Script completed with return code ${code}`);
+
+	log.verbose(`Script completed with return code ${code} in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
 	return code;
 }
 
