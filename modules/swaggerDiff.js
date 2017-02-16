@@ -185,32 +185,32 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
         version.major++;
         version.minor = 0;
         version.point = 0;
-        return version;
     }
-
     // Minor
-    if (_.find(this.changes, function(changeGroup) {
+    else if (_.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_MINOR] ? changeGroup[IMPACT_MINOR].length > 0 : false;
     })) {
         version.minor++;
         version.point = 0;
-        return version;
     }
-
     // Point
-    if (_.find(this.changes, function(changeGroup) {
+    else if (_.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_POINT] ? changeGroup[IMPACT_POINT].length > 0 : false;
     })) {
         version.point++;
-        return version;
     }
+
+    version.display = this.stringifyVersion(version);
+    version.displayFull = this.stringifyVersion(version, true);
 
     return version;
 };
 
-SwaggerDiff.prototype.stringifyVersion = function(version) {
+SwaggerDiff.prototype.stringifyVersion = function(version, includePrerelease) {
     return `${version.major}.${version.minor}.${version.point}` + 
-        (version.prerelease && version.prerelease.length > 0 ? `-${version.prerelease}` : '');
+        (includePrerelease === true && version.prerelease && version.prerelease.length > 0 ? 
+            `-${version.prerelease}` : 
+            '');
 };
 
 

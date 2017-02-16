@@ -1,5 +1,6 @@
 const _ = require('lodash');
 const childProcess = require('child_process');
+const deref = require('json-schema-deref-sync');
 const fs = require('fs-extra');
 const moment = require('moment-timezone');
 const Winston = require('winston');
@@ -22,23 +23,8 @@ var log;
 
 function Builder(config) {
 	try {
-		this.config = config;
+		this.config = deref(config);
 		self = this;
-
-		// Checketh thyself before thou wrecketh thyself
-		maybeInit(this, 'config', {});
-		maybeInit(this.config, 'version', {major:0,minor:0,point:0,prerelease:''}, 'Version not set. Initializing to 0.0.0');
-		maybeInit(this.config, 'settings', {});
-		maybeInit(this.config.settings, 'swagger', {});
-		maybeInit(this.config, 'stageSettings', {});
-		maybeInit(this.config.stageSettings, 'prebuild', {});
-		maybeInit(this.config.stageSettings, 'build', {});
-		maybeInit(this.config.stageSettings, 'postbuild', {});
-
-		// Check for required settings
-		checkAndThrow(this.config.settings, 'sdkRepo');
-		checkAndThrow(this.config.settings.swagger, 'oldSwaggerPath');
-		checkAndThrow(this.config.settings.swagger, 'newSwaggerPath');
 
 		// https://github.com/winstonjs/winston#logging-levels
 		// silly > debug > verbose > info > warn > error
@@ -55,11 +41,27 @@ function Builder(config) {
 		});
 		console.log(`Log level is ${logLevel}`);
 
+
+		// Checketh thyself before thou wrecketh thyself
+		maybeInit(this, 'config', {});
+		maybeInit(this.config, 'version', {major:0,minor:0,point:0,prerelease:''}, 'Version not set. Initializing to 0.0.0');
+		maybeInit(this.config, 'settings', {});
+		maybeInit(this.config.settings, 'swagger', {});
+		maybeInit(this.config, 'stageSettings', {});
+		maybeInit(this.config.stageSettings, 'prebuild', {});
+		maybeInit(this.config.stageSettings, 'build', {});
+		maybeInit(this.config.stageSettings, 'postbuild', {});
+
+		// Check for required settings
+		checkAndThrow(this.config.settings, 'sdkRepo');
+		checkAndThrow(this.config.settings.swagger, 'oldSwaggerPath');
+		checkAndThrow(this.config.settings.swagger, 'newSwaggerPath');
+
 		// Set env vars
-		setEnv('SDK_REPO', path.join('./output', this.config.settings.swaggerCodegen.language));
-		fs.mkdirp(getEnv('SDK_REPO'));
-		setEnv('SDK_TEMP', path.join('./temp', this.config.settings.swaggerCodegen.language));
-		fs.mkdirp(getEnv('SDK_TEMP'));
+		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.language)));
+		fs.removeSync(getEnv('SDK_REPO'));
+		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.language)));
+		fs.emptyDirSync(getEnv('SDK_TEMP'));
 
 		// Load env vars from config
 		_.forOwn(this.config.envVars, (value, key) => setEnv(key, value));
@@ -78,7 +80,7 @@ function Builder(config) {
 		};
 		newSwaggerTempFile = path.join(getEnv('SDK_TEMP'), 'newSwagger.json');
 	} catch(err) {
-		log.error(err);
+		console.log(err);
 		throw err;
 	}
 }
@@ -152,63 +154,89 @@ module.exports = Builder;
 function prebuildImpl() {
 	var deferred = Q.defer();
 
-	//log.debug(self);
+	try {
 
-	// Pre-run scripts
-	executeScripts(self.config.stageSettings.prebuild.preRunScripts, 'custom prebuild pre-run');
+		//log.debug(self);
 
-	// Prepare for repo clone
-	var sdkRepo = self.config.settings.sdkRepo;
-	var repo, branch;
+		// Pre-run scripts
+		executeScripts(self.config.stageSettings.prebuild.preRunScripts, 'custom prebuild pre-run');
 
-	// Check for basic or extended config
-	if (typeof(sdkRepo) == 'string') {
-		repo = sdkRepo;
-	} else {
-		repo = sdkRepo.repo;
-		branch = sdkRepo.branch;
+		// Prepare for repo clone
+		var sdkRepo = self.config.settings.sdkRepo;
+		var repo, branch;
+
+		// Check for basic or extended config
+		if (typeof(sdkRepo) == 'string') {
+			repo = sdkRepo;
+		} else {
+			repo = sdkRepo.repo;
+			branch = sdkRepo.branch;
+		}
+
+		// Clone repo
+		var startTime = moment();
+		log.info(`Cloning ${repo} (${branch}) to ${getEnv('SDK_REPO')}`);
+		git.clone(repo, branch, getEnv('SDK_REPO'))
+			.then(function(repository) {
+				log.debug(`Clone operation completed in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
+				self.repository = repository;
+			})
+			.then(function() {
+				// Diff swagger
+				log.info('Diffing swagger files...');
+				swaggerDiff.useSdkVersioning = true;
+				swaggerDiff.getAndDiff(
+					self.config.settings.swagger.oldSwaggerPath, 
+					self.config.settings.swagger.newSwaggerPath, 
+					self.config.settings.swagger.saveOldSwaggerPath,
+					self.config.settings.swagger.saveNewSwaggerPath);
+
+				// Save new swagger to temp file for build
+				log.info(`Writing new swagger file to temp storage path: ${newSwaggerTempFile}`);
+				fs.writeFileSync(newSwaggerTempFile, JSON.stringify(swaggerDiff.newSwagger));
+			})
+			.then(function() {
+				//TODO: add in notifications!!!
+			})
+			.then(function() {
+				self.version = {
+					"major": 0,
+					"minor": 0,
+					"point": 0,
+					"prerelease": "UNKNOWN",
+					"apiVersion": 0
+				};
+
+				if (self.config.settings.versionFile) {
+					if (!fs.existsSync(self.config.settings.versionFile)) {
+						self.version = fs.readFileSync(self.config.settings.versionFile, 'utf8');
+					} else {
+						log.warn(`Version file not found: ${self.config.settings.versionFile}`);
+					}
+				} else {
+					log.warn('Version file not specified! Defaulting to 0.0.0-UNKNOWN');
+				}
+
+				// Increment version in config
+				log.debug(`Previous version: ${swaggerDiff.stringifyVersion(self.version)}`);
+				swaggerDiff.incrementVersion(self.version);
+				log.info(`New version: ${self.version.displayFull}`);
+
+				if (self.config.settings.versionFile) {
+					fs.writeFileSync(self.config.settings.versionFile, JSON.stringify(self.version, null, 2));
+				}
+			})
+			.then(function() {
+				// Get release notes
+				log.info('Generating release notes...');
+				self.releaseNotes = swaggerDiff.generateReleaseNotes(releaseNoteTemplatePath);
+			})
+			.then(() => executeScripts(self.config.stageSettings.prebuild.postRunScripts, 'custom prebuild post-run'))
+			.then(() => deferred.resolve())
+			.catch((err) => deferred.reject(err));
+	} catch(err) {
+		deferred.reject(err);
 	}
-
-	// Clone repo
-	var startTime = moment();
-	log.info(`Cloning ${repo} (${branch}) to ${getEnv('SDK_REPO')}`);
-	fs.removeSync(getEnv('SDK_REPO'));
-	git.clone(repo, branch, getEnv('SDK_REPO'))
-		.then(function(repository) {
-			log.debug(`Clone operation completed in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
-			self.repository = repository;
-		})
-		.then(function() {
-			// Diff swagger
-			log.info('Diffing swagger files...');
-			swaggerDiff.useSdkVersioning = true;
-			swaggerDiff.getAndDiff(
-				self.config.settings.swagger.oldSwaggerPath, 
-				self.config.settings.swagger.newSwaggerPath, 
-				self.config.settings.swagger.saveOldSwaggerPath,
-				self.config.settings.swagger.saveNewSwaggerPath);
-
-			// Save new swagger to temp file for build
-			log.info(`Writing new swagger file to temp storage path: ${newSwaggerTempFile}`);
-			fs.writeFileSync(newSwaggerTempFile, JSON.stringify(swaggerDiff.newSwagger));
-		})
-		.then(function() {
-			//TODO: add in notifications!!!
-		})
-		.then(function() {
-			// Increment version in config
-			log.debug(`Previous version: ${swaggerDiff.stringifyVersion(self.config.version)}`);
-			swaggerDiff.incrementVersion(self.config.version);
-			log.info(`New version: ${swaggerDiff.stringifyVersion(self.config.version)}`);
-		})
-		.then(function() {
-			// Get release notes
-			log.info('Generating release notes...');
-			self.releaseNotes = swaggerDiff.generateReleaseNotes(releaseNoteTemplatePath);
-		})
-		.then(() => executeScripts(self.config.stageSettings.prebuild.postRunScripts, 'custom prebuild post-run'))
-		.then(() => deferred.resolve())
-		.catch((err) => deferred.reject(err));
 
 	return deferred.promise;
 }
@@ -216,51 +244,55 @@ function prebuildImpl() {
 function buildImpl() {
 	var deferred = Q.defer();
 
-	// Pre-run scripts
-	executeScripts(self.config.stageSettings.build.preRunScripts, 'custom build pre-run');
+	try {
+		// Pre-run scripts
+		executeScripts(self.config.stageSettings.build.preRunScripts, 'custom build pre-run');
 
-	var outputDir = path.join(getEnv('SDK_REPO'), 'build');
-	log.debug(`SDK build dir -> ${outputDir}`);
-	fs.emptyDirSync(outputDir);
+		var outputDir = path.join(getEnv('SDK_REPO'), 'build');
+		log.debug(`SDK build dir -> ${outputDir}`);
+		fs.emptyDirSync(outputDir);
 
 
-	var command = '';
-	// Java command and options
-	command += `java ${getEnv('JAVA_OPTS')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
-	// Swagger-codegen jar file
-	command += `-jar ${self.config.settings.swaggerCodegen.jarPath} `;
-	// Swagger-codegen options
-	command += `generate `;
-	command += `-i ${newSwaggerTempFile} `;
-	command += `-l ${self.config.settings.swaggerCodegen.language} `;
-	command += `-o ${outputDir} `;
-	command += `-c ${self.config.settings.swaggerCodegen.configFile} `;
-	command += `-t ${self.resourcePaths.templates}`;
-	_.forOwn(self.config.settings.swaggerCodegen.extraGeneratorOptions, (option) => command += ' ' + option);
+		var command = '';
+		// Java command and options
+		command += `java ${getEnv('JAVA_OPTS')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
+		// Swagger-codegen jar file
+		command += `-jar ${self.config.settings.swaggerCodegen.jarPath} `;
+		// Swagger-codegen options
+		command += `generate `;
+		command += `-i ${newSwaggerTempFile} `;
+		command += `-l ${self.config.settings.swaggerCodegen.language} `;
+		command += `-o ${outputDir} `;
+		command += `-c ${self.config.settings.swaggerCodegen.configFile} `;
+		command += `-t ${self.resourcePaths.templates}`;
+		_.forEach(self.config.settings.swaggerCodegen.extraGeneratorOptions, (option) => command += ' ' + option);
 
-	log.info('Running swagger-codegen...');
-	log.debug(command);
-	var code = childProcess.execSync(command);
+		log.info('Running swagger-codegen...');
+		log.debug(`command: ${command}`);
+		var code = childProcess.execSync(command);
 
-	log.info('Copying extensions...');
-	fs.copySync(this.resourcePaths.extensions, self.config.settings.extensionsDestination);
+		log.info('Copying extensions...');
+		fs.copySync(this.resourcePaths.extensions, self.config.settings.extensionsDestination);
 
-	// Run compile scripts
-	executeScripts(this.config.stageSettings.build.compileScripts, 'compile');
+		// Run compile scripts
+		executeScripts(this.config.stageSettings.build.compileScripts, 'compile');
 
-	log.info('Copying readme...');
-	fs.createReadStream(path.join(getEnv('SDK_REPO'), 'README.md'))
-		.pipe(fs.createWriteStream(path.join(getEnv('SDK_REPO'), 'build/docs/index.md')));
+		log.info('Copying readme...');
+		fs.createReadStream(path.join(getEnv('SDK_REPO'), 'README.md'))
+			.pipe(fs.createWriteStream(path.join(getEnv('SDK_REPO'), 'build/docs/index.md')));
 
-	log.info('Zipping docs...');
-	zip.zipDir(path.join(outputDir, 'docs'), path.join(getEnv('SDK_TEMP'), 'docs.zip'))
-		.then(function() {
-			log.info('Committing SDK repo...');
-			// TODO: commit to git
-		})
-		.then(() => executeScripts(self.config.stageSettings.build.postRunScripts, 'custom build post-run'))
-		.then(() => deferred.resolve())
-		.catch((err) => deferred.reject(err));
+		log.info('Zipping docs...');
+		zip.zipDir(path.join(outputDir, 'docs'), path.join(getEnv('SDK_TEMP'), 'docs.zip'))
+			.then(function() {
+				log.info('Committing SDK repo...');
+				// TODO: commit to git
+			})
+			.then(() => executeScripts(self.config.stageSettings.build.postRunScripts, 'custom build post-run'))
+			.then(() => deferred.resolve())
+			.catch((err) => deferred.reject(err));
+	} catch(err) {
+		deferred.reject(err);
+	}
 
 	return deferred.promise;
 }
@@ -279,10 +311,23 @@ function executeScript(script) {
 	var startTime = moment();
 
 	try {
-		var args = script.args ? script.args : [];
-		args.unshift(script.path);
+		var scriptPath = script.path;
+		if (!path.parse(scriptPath).dir)
+			scriptPath = path.join('./resources/sdk', self.config.settings.swaggerCodegen.language, 'scripts', script.path);
+		scriptPath = path.resolve(scriptPath);
 
-		log.verbose(`Executing ${script.type} script as: ${args.join(' ')}`);
+		var args = script.args ? script.args.slice() : [];
+		args.unshift(scriptPath);
+
+		log.verbose(`Executing ${script.type} script: ${args.join(' ')}`);
+
+		if (!fs.existsSync(scriptPath)) {
+			var msg = `Script not found: ${scriptPath}`;
+			var error = new Error(msg);
+			error.error = msg;
+			error.status = 999;
+			throw error;
+		}
 
 		switch (script.type.toLowerCase()) {
 			case 'node': {
@@ -309,8 +354,16 @@ function executeScript(script) {
 			code = err.status;
 	}
 
-	log.verbose(`Script completed with return code ${code} in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
-	return code;
+	var completedMessage = `Script completed with return code ${code} in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`;
+	if (code !== 0) {
+		log.error(completedMessage);
+		if (script.failOnError === true) {
+			throw new Error(`Script failed! Aborting. Script: ${JSON.stringify(script, null, 2)}`);
+		}
+	} else {
+		log.verbose(completedMessage);
+		return code;
+	}
 }
 
 function lenSafe(arr) {

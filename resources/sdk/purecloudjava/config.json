@@ -1,20 +1,14 @@
 {
   "name": "Java SDK",
-  "version": {
-    "major": 0,
-    "minor": 0,
-    "point": 0,
-    "prerelease": ""
-  },
   "envVars": {
-    "SDK_RESOURCE_DIR": "./resources/sdk/purecloudjava",
-    "SDK_SCRIPTS_DIR": "./resources/sdk/purecloudjava/scripts"
+    "key":"value"
   },
   "settings": {
     "sdkRepo": {
       "repo": "https://github.com/MyPureCloud/purecloud_api_sdk_java.git",
       "branch": "sdkv1"
     },
+    "versionFile": "${SDK_REPO}/version.json",
     "logLevel": "debug",
     "extensionsDestination": "${SDK_REPO}/build/src/main/java/com/mypurecloud/sdk",
     "swagger": {
@@ -35,19 +29,23 @@
       "preRunScripts": [
         {
           "type": "node",
-          "path": "${SDK_SCRIPTS_DIR}/test.js",
+          "path": "test.js",
           "args": [
           	"prebuild-prerun"
-          ]
+          ],
+          "failOnError": true
         }
       ],
       "postRunScripts": [
         {
           "type": "node",
-          "path": "${SDK_SCRIPTS_DIR}/test.js",
+          "path": "prebuild-postrun.js",
           "args": [
-          	"prebuild-postrun"
-          ]
+          	{ "$ref": "#/settings/swaggerCodegen/configFile" },
+          	{ "$ref": "#/settings/versionFile" },
+          	"platform-client"
+          ],
+          "failOnError": true
         }
       ]
     },
@@ -55,26 +53,28 @@
       "preRunScripts": [
         {
           "type": "node",
-          "path": "${SDK_SCRIPTS_DIR}/test.js",
+          "path": "test.js",
           "args": [
           	"build-prerun"
-          ]
+          ],
+          "failOnError": true
         }
       ],
       "compileScripts": [
         {
           "type": "shell",
-          "path": "${SDK_SCRIPTS_DIR}/compile.sh",
+          "path": "compile.sh",
           "args": []
         }
       ],
       "postRunScripts": [
         {
           "type": "node",
-          "path": "${SDK_SCRIPTS_DIR}/test.js",
+          "path": "test.js",
           "args": [
           	"build-postrun"
-          ]
+          ],
+          "failOnError": true
         }
       ]
     },
