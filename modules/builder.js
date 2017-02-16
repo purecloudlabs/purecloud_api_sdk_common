@@ -1,5 +1,4 @@
 const _ = require('lodash');
-const archiver = require('archiver');
 const childProcess = require('child_process');
 const fs = require('fs-extra');
 const moment = require('moment-timezone');
@@ -9,6 +8,7 @@ const Q = require('q');
 
 const swaggerDiff = require('./swaggerDiff');
 const git = require('./gitModule');
+const zip = require('./zip');
 
 
 /* PRIVATE VARS */
@@ -253,7 +253,7 @@ function buildImpl() {
 		.pipe(fs.createWriteStream(path.join(getEnv('SDK_REPO'), 'build/docs/index.md')));
 
 	log.info('Zipping docs...');
-	zip(path.join(outputDir, 'docs'), path.join(getEnv('SDK_TEMP'), 'docs.zip'))
+	zip.zipDir(path.join(outputDir, 'docs'), path.join(getEnv('SDK_TEMP'), 'docs.zip'))
 		.then(function() {
 			log.info('Committing SDK repo...');
 			// TODO: commit to git
@@ -357,27 +357,4 @@ function resolveEnvVars(config) {
 			resolveEnvVars(value);
 		}
 	});
-}
-
-function zip(inputDir, outputPath) {
-	var deferred = Q.defer();
-
-	var output = file_system.createWriteStream(outputPath);
-	var archive = archiver('zip');
-
-	output.on('close', function () {
-	    console.log(archive.pointer() + ' total bytes');
-	    console.log('archiver has been finalized and the output file descriptor has closed.');
-	    deferred.resolve();
-	});
-
-	archive.on('error', function(err){
-	    deferred.reject(err);
-	});
-
-	archive.pipe(output);
-	archive.directory(inputDir);
-	archive.finalize();
-
-	return deferred.promise;
 }
