@@ -1,5 +1,8 @@
+const _ = require('lodash');
 const spawn = require('child_process').spawn;
 const Q = require('q');
+
+const log = require('./logger');
 
 
 
@@ -25,17 +28,17 @@ Git.prototype.clone = function(repo, branch, target) {
 		args.push(repo);
 		args.push(target);
 
-		console.log(`Spawn: git ${args.join(' ')}`);
+		log.debug(`Spawn: git ${args.join(' ')}`);
 
 		var cmd = spawn('git', args, { stdio: 'inherit' });
 		
 		cmd.on('error', (err) => {
-			console.log(`Git clone failed: ${err.message}`);
+			log.error(`Git clone failed: ${err.message}`);
 			deferred.reject(err);
 		});
 
 		cmd.on('close', (code) => {
-			console.log(`Process exited with code ${code}`);
+			log.info(`Process exited with code ${code}`);
 			if (code === 0)
 				deferred.resolve();
 			else

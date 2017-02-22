@@ -1,7 +1,7 @@
 {
   "name": "Java SDK",
   "envVars": {
-    "key":"value"
+    "OPERATION_ID_PROPERTY":"x-inin-method-name"
   },
   "settings": {
     "sdkRepo": {
@@ -64,7 +64,12 @@
         {
           "type": "shell",
           "path": "compile.sh",
-          "args": []
+          "args": [
+          	"verify",
+          	"${SDK_REPO}/build",
+          	"${WORKSPACE}/settings.xml",
+          	"${DPGP_PASSPHRASE}"
+          ]
         }
       ],
       "postRunScripts": [
@@ -78,6 +83,27 @@
         }
       ]
     },
-    "postbuild": {}
+    "postbuild": {
+      "preRunScripts": [
+        {
+          "type": "node",
+          "path": "test.js",
+          "args": [
+          	"postbuild-prerun"
+          ],
+          "failOnError": true
+        }
+      ],
+      "postRunScripts": [
+        {
+          "type": "node",
+          "path": "test.js",
+          "args": [
+          	"postbuild-postrun"
+          ],
+          "failOnError": true
+        }
+      ]
+    }
   }
 }

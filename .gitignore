@@ -2,7 +2,9 @@
 swagger.json
 /temp
 /local
-test.js
+/test.js
+localConfig.json
+localConfig.yml
 
 
 

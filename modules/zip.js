@@ -13,7 +13,7 @@ function Zip() {
 Zip.prototype.zipDir = function(inputDir, outputPath) {
 	var deferred = Q.defer();
 
-	var output = file_system.createWriteStream(outputPath);
+	var output = fs.createWriteStream(outputPath);
 	var archive = archiver('zip');
 
 	output.on('close', function () {
@@ -27,7 +27,7 @@ Zip.prototype.zipDir = function(inputDir, outputPath) {
 	});
 
 	archive.pipe(output);
-	archive.directory(inputDir);
+	archive.directory(inputDir, '/');
 	archive.finalize();
 
 	return deferred.promise;

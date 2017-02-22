@@ -3,6 +3,8 @@ const _ = require('lodash');
 const childProcess = require('child_process');
 const dot = require('dot');
 
+const log = require('./logger');
+
 
 /* PRIVATE VARS */
 
@@ -52,37 +54,37 @@ SwaggerDiff.prototype.newSwagger = {};
 SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, saveOldSwaggerPath, saveNewSwaggerPath) {
     // Retrieve old swagger
     if (fs.existsSync(oldSwaggerPath)) {
-        console.log(`Loading old swagger from disk: ${oldSwaggerPath}`);
+        log.info(`Loading old swagger from disk: ${oldSwaggerPath}`);
         this.oldSwagger = JSON.parse(fs.readFileSync(oldSwaggerPath, 'utf8'));
     } else if (oldSwaggerPath.toLowerCase().startsWith('http')) {
-        console.log(`Downloading old swagger from: ${oldSwaggerPath}`);
+        log.info(`Downloading old swagger from: ${oldSwaggerPath}`);
         this.oldSwagger = JSON.parse(downloadFile(oldSwaggerPath));
     } else {
-        console.log(`WARNING: Invalid oldSwaggerPath: ${oldSwaggerPath}`);
+        log.warn(`Invalid oldSwaggerPath: ${oldSwaggerPath}`);
     }
 
-    console.log(`Old swagger length: ${JSON.stringify(this.oldSwagger).length}`);
+    log.debug(`Old swagger length: ${JSON.stringify(this.oldSwagger).length}`);
 
     // Retrieve new swagger
     if (fs.existsSync(newSwaggerPath)) {
-        console.log(`Loading new swagger from disk: ${newSwaggerPath}`);
+        log.info(`Loading new swagger from disk: ${newSwaggerPath}`);
         this.newSwagger = JSON.parse(fs.readFileSync(newSwaggerPath, 'utf8'));
     } else if (newSwaggerPath.toLowerCase().startsWith('http')) {
-        console.log(`Downloading old swagger from: ${newSwaggerPath}`);
+        log.info(`Downloading new swagger from: ${newSwaggerPath}`);
         this.newSwagger = JSON.parse(downloadFile(newSwaggerPath));
     } else {
-        console.log(`WARNING: Invalid newSwaggerPath: ${newSwaggerPath}`);
+        log.warn(`Invalid newSwaggerPath: ${newSwaggerPath}`);
     }
 
-    console.log(`New swagger length: ${JSON.stringify(this.newSwagger).length}`);
+    log.debug(`New swagger length: ${JSON.stringify(this.newSwagger).length}`);
 
     // Save files to disk
     if (saveOldSwaggerPath) {
-        console.log(`Writing old swagger to ${saveOldSwaggerPath}`);
+        log.info(`Writing old swagger to ${saveOldSwaggerPath}`);
         fs.writeFileSync(saveOldSwaggerPath, JSON.stringify(this.oldSwagger));
     }
     if (saveNewSwaggerPath) {
-        console.log(`Writing new swagger to ${saveNewSwaggerPath}`);
+        log.info(`Writing new swagger to ${saveNewSwaggerPath}`);
         fs.writeFileSync(saveNewSwaggerPath, JSON.stringify(this.newSwagger));
     }
     
@@ -96,12 +98,12 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, save
 };
 
 SwaggerDiff.prototype.diff = function(oldSwagger, newSwagger) {
-    console.log('Diffing swagger files...');
+    log.info('Diffing swagger files...');
     checkOperations(oldSwagger, newSwagger);
     checkModels(oldSwagger, newSwagger);
-    console.log(`Swagger diff complete. Found ${this.changeCount} changes.`);
+    log.info(`Swagger diff complete. Found ${this.changeCount} changes.`);
 
-    //console.log(JSON.stringify(this.changes, null, 2));
+    //log.debug(JSON.stringify(this.changes, null, 2));
 };
 
 SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
@@ -153,7 +155,7 @@ SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
     changesData.minor = _.values(changesObject.minor);
     changesData.point = _.values(changesObject.point);
 
-    //console.log(JSON.stringify(changesData, null, 2));
+    //log.info(JSON.stringify(changesData, null, 2));
 
     // Load template
     var templateString = template;
@@ -169,11 +171,11 @@ SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
     };
 
     // Compile template
-    console.log('Compiling template...');
+    log.info('Compiling template...');
     var compiledTemplate = dot.template(templateString, null, defs);
 
     // Execute template
-    console.log('Executing template...');
+    log.info('Executing template...');
     return compiledTemplate(defs);
 };
 

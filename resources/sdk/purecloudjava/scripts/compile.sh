@@ -1,16 +1,31 @@
-# Compile module
-cd $REPO/build
+BUILD_MODE=$1
+BUILD_DIR=$2
+MAVEN_SETTINGS_FILE=$3
+DPGP_PASSPHRASE=$4
 
 echo "BUILD_MODE=$BUILD_MODE"
-if [ $BUILD_MODE == "verify" ]
+echo "BUILD_DIR=$BUILD_DIR"
+echo "MAVEN_SETTINGS_FILE=$MAVEN_SETTINGS_FILE"
+
+# Verify settings
+if [ ! -z "$MAVEN_SETTINGS_FILE" ]
 then
-	# Build and sign
-	mvn --settings $MAVEN_SETTINGS_FILE verify -Dgpg.passphrase=$DPGP_PASSPHRASE
-elif [ $BUILD_MODE == "deploy" ]
-then
-	# Build, sign, deploy to sonatype, and release to maven central
-	mvn --settings $MAVEN_SETTINGS_FILE deploy -Dgpg.passphrase=$DPGP_PASSPHRASE
-else
-	# Default, just build
-	mvn package
+	MAVEN_SETTINGS_FILE="--settings $MAVEN_SETTINGS_FILE"
 fi
+
+if [ ! -z "$DPGP_PASSPHRASE" ]
+then
+	DPGP_PASSPHRASE="-Dgpg.passphrase=$DPGP_PASSPHRASE"
+fi
+
+if [ ! "$BUILD_MODE" = "verify" ] && [ ! "$BUILD_MODE" = "deploy" ] && [ ! "$BUILD_MODE" = "package" ]
+then
+	echo "Unknown build mode $BUILD_MODE"
+	exit 1
+fi
+
+# CD to build dir
+cd $BUILD_DIR
+
+# Build
+mvn $MAVEN_SETTINGS_FILE $BUILD_MODE $DPGP_PASSPHRASE

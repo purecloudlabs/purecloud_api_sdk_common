@@ -3,10 +3,13 @@ const childProcess = require('child_process');
 const deref = require('json-schema-deref-sync');
 const fs = require('fs-extra');
 const moment = require('moment-timezone');
-const Winston = require('winston');
 const path = require('path');
+const pluralize = require('pluralize');
+const purecloud = require('purecloud_api_sdk_javascript');
 const Q = require('q');
+const yaml = require('yamljs');
 
+const log = require('./logger');
 const swaggerDiff = require('./swaggerDiff');
 const git = require('./gitModule');
 const zip = require('./zip');
@@ -16,31 +19,23 @@ const zip = require('./zip');
 
 var newSwaggerTempFile = '';
 var releaseNoteTemplatePath = './resources/templates/releaseNoteSummary.md';
-var log;
 
 
 /* CONSTRUCTOR */
 
-function Builder(config) {
+function Builder(configPath, localConfigPath) {
 	try {
-		this.config = deref(config);
+		// Load config files
+		this.config = deref(loadConfig(configPath));
+		this.localConfig = deref(loadConfig(localConfigPath));
+
+		// Initialize self reference
 		self = this;
 
 		// https://github.com/winstonjs/winston#logging-levels
 		// silly > debug > verbose > info > warn > error
-		var logLevel = this.config.settings.logLevel ? this.config.settings.logLevel : 'debug';
-		log = new Winston.Logger({
-		    transports: [
-		        new Winston.transports.Console({
-		            level: logLevel,
-		            handleExceptions: true,
-		            json: false,
-		            colorize: true
-		        })
-		    ]
-		});
-		console.log(`Log level is ${logLevel}`);
-
+		if (this.config.settings.logLevel)
+			log.setLogLevel(this.config.settings.logLevel);
 
 		// Checketh thyself before thou wrecketh thyself
 		maybeInit(this, 'config', {});
@@ -65,11 +60,23 @@ function Builder(config) {
 
 		// Load env vars from config
 		_.forOwn(this.config.envVars, (value, key) => setEnv(key, value));
+		_.forOwn(this.localConfig.envVars, (group, groupKey) => {
+			if (group.groupDisabled !== true)
+				_.forOwn(group, (value, key) => setEnv(key, value));
+		});
 
 		// Resolve env vars in config
 		resolveEnvVars(this.config);
-		if (this.config.settings.debugConfig === true)
+		resolveEnvVars(this.localConfig);
+		if (this.config.settings.debugConfig === true) {
+			if (this.localConfig)
+				log.debug('Local config file: \n' + JSON.stringify(this.localConfig,null,2));
 			log.debug('Config file: \n' + JSON.stringify(this.config,null,2));
+		}
+
+		// Process override settings
+		this.skipCommit = getOverride('SKIP_COMMIT', false);
+		this.excludeNotifications = getOverride('EXCLUDE_NOTIFICATIONS', false);
 
 		// Initialize instance vars
 		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
@@ -79,6 +86,12 @@ function Builder(config) {
 			templates: path.join(resourceRoot, 'templates')
 		};
 		newSwaggerTempFile = path.join(getEnv('SDK_TEMP'), 'newSwagger.json');
+		this.pureCloud = {
+			clientId: getEnv('PURECLOUD_CLIENT_ID'),
+			clientSecret: getEnv('PURECLOUD_CLIENT_SECRET'),
+			environment: getOverride('PURECLOUD_ENVIRONMENT', 'mypurecloud.com')
+		};
+		this.notificationDefinitions = {};
 	} catch(err) {
 		console.log(err);
 		throw err;
@@ -112,9 +125,7 @@ Builder.prototype.fullBuild = function() {
 Builder.prototype.prebuild = function() {
 	var deferred = Q.defer();
 
-	log.info('===================');
-	log.info('= STAGE: prebuild =');
-	log.info('===================');
+	log.writeBox('STAGE: pre-build');
 
 	prebuildImpl()
 		.then(() => log.info('Stage complete: prebuild'))
@@ -127,9 +138,7 @@ Builder.prototype.prebuild = function() {
 Builder.prototype.build = function() {
 	var deferred = Q.defer();
 
-	log.info('================');
-	log.info('= STAGE: build =');
-	log.info('================');
+	log.writeBox('STAGE: build');
 
 	buildImpl()
 		.then(() => log.info('Stage complete: build'))
@@ -140,7 +149,16 @@ Builder.prototype.build = function() {
 };
 
 Builder.prototype.postbuild = function() {
+	var deferred = Q.defer();
 
+	log.writeBox('STAGE: post-build');
+
+	postbuildImpl()
+		.then(() => log.info('Stage complete: post-build'))
+		.then(() => deferred.resolve())
+		.catch((err) => deferred.reject(err));
+
+	return deferred.promise;
 };
 
 
@@ -190,13 +208,14 @@ function prebuildImpl() {
 					self.config.settings.swagger.newSwaggerPath, 
 					self.config.settings.swagger.saveOldSwaggerPath,
 					self.config.settings.swagger.saveNewSwaggerPath);
-
+			})
+			.then(() => {
+				return addNotifications();
+			})
+			.then(() => {
 				// Save new swagger to temp file for build
 				log.info(`Writing new swagger file to temp storage path: ${newSwaggerTempFile}`);
 				fs.writeFileSync(newSwaggerTempFile, JSON.stringify(swaggerDiff.newSwagger));
-			})
-			.then(function() {
-				//TODO: add in notifications!!!
 			})
 			.then(function() {
 				self.version = {
@@ -255,7 +274,7 @@ function buildImpl() {
 
 		var command = '';
 		// Java command and options
-		command += `java ${getEnv('JAVA_OPTS')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
+		command += `java ${getEnv('JAVA_OPTS', '')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
 		// Swagger-codegen jar file
 		command += `-jar ${self.config.settings.swaggerCodegen.jarPath} `;
 		// Swagger-codegen options
@@ -269,13 +288,18 @@ function buildImpl() {
 
 		log.info('Running swagger-codegen...');
 		log.debug(`command: ${command}`);
-		var code = childProcess.execSync(command);
+		var code = childProcess.execSync(command, {stdio:'inherit'});
 
 		log.info('Copying extensions...');
-		fs.copySync(this.resourcePaths.extensions, self.config.settings.extensionsDestination);
+		fs.copySync(self.resourcePaths.extensions, self.config.settings.extensionsDestination);
+
+		// Ensure compile scripts fail on error
+		_.forEach(self.config.stageSettings.build.compileScripts, function(script) {
+			script.failOnError = true;
+		});
 
 		// Run compile scripts
-		executeScripts(this.config.stageSettings.build.compileScripts, 'compile');
+		executeScripts(self.config.stageSettings.build.compileScripts, 'compile');
 
 		log.info('Copying readme...');
 		fs.createReadStream(path.join(getEnv('SDK_REPO'), 'README.md'))
@@ -297,12 +321,162 @@ function buildImpl() {
 	return deferred.promise;
 }
 
+function postbuildImpl() {
+	var deferred = Q.defer();
+
+	try {
+		// Pre-run scripts
+		executeScripts(self.config.stageSettings.postbuild.preRunScripts, 'custom postbuild pre-run');
+
+		deleteme()
+			.then(() => executeScripts(self.config.stageSettings.postbuild.postRunScripts, 'custom postbuild post-run'))
+			.then(() => deferred.resolve())
+			.catch((err) => deferred.reject(err));
+	} catch(err) {
+		deferred.reject(err);
+	}
+
+	return deferred.promise;
+}
+
+function deleteme() {
+	var deferred = Q.defer();
+
+	deferred.resolve();
+
+	return deferred.promise;
+}
+
 
 /* PRIVATE FUNCTIONS */
 
+function addNotifications() {
+	var deferred = Q.defer();
+
+	try {
+		// Skip notifications
+		if (self.excludeNotifications === true) {
+			log.info('Not adding notifications to schema');
+			deferred.resolve();
+			return deferred.promise;
+		}
+		
+		// Check PureCloud settings
+		checkAndThrow(self.pureCloud, 'clientId', 'Environment variable PURECLOUD_CLIENT_ID must be set!');
+		checkAndThrow(self.pureCloud, 'clientSecret', 'Environment variable PURECLOUD_CLIENT_SECRET must be set!');
+		checkAndThrow(self.pureCloud, 'environment', 'PureCloud environment was blank!');
+
+        var pureCloudSession = purecloud.PureCloudSession({
+            strategy: 'client-credentials',
+            timeout: 20000,
+            clientId: self.pureCloud.clientId,
+            clientSecret: self.pureCloud.clientSecret,
+            environment: self.pureCloud.environment
+        });
+        var notificationsApi = new purecloud.NotificationsApi(pureCloudSession);
+
+        pureCloudSession.login()
+        	.then(() => {
+        		return notificationsApi.getAvailabletopics(['schema']);
+        	})
+        	.then((notifications) => {
+                var notificationMappings = {'notifications':[]};
+
+                // Process schemas
+                log.info(`Processing ${notifications.entities.length} notification schemas...`);
+                _.forEach(notifications.entities, (entity) => {
+                    if (!entity.schema) {
+                        log.warn(`Notification ${entity.id} does not have a defined schema!`);
+                        return;
+                    }
+
+                    var schemaIdArray = entity.schema.id.split(':');
+                    var schemaName = schemaIdArray[schemaIdArray.length - 1] + 'Notification';
+                    log.silly(`Notification mapping: ${entity.id} (${schemaName})`);
+                    notificationMappings.notifications.push({'topic':entity.id, 'class':schemaName});
+                    extractDefinitons(schemaName, entity.schema);
+                });
+
+                // Fix references (make standard JSON Pointers instead of URI) and add to swagger
+                _.forOwn(self.notificationDefinitions, (definition) => {
+                	fixRefs(definition); 
+                	swaggerDiff.newSwagger.definitions[definition.name] = definition.schema;
+                });
+
+                // Write mappings to file
+                var mappingFilePath = path.resolve(path.join(getEnv('SDK_TEMP'), 'notificationMappings.json'));
+                log.info(`Writing Notification mappings to ${mappingFilePath}`);
+                fs.writeFileSync(mappingFilePath, JSON.stringify(notificationMappings, null, 2));
+
+                deferred.resolve();
+        	})
+			.catch((err) => deferred.reject(err));
+	} catch(err) {
+		deferred.reject(err);
+	}
+
+	return deferred.promise;
+}
+
+function extractDefinitons(schemaName, entity) {
+    try {
+    	_.forOwn(entity, (value, key) => {
+            if (key == 'id' && typeof(value) == 'string') {
+                var entityIdArray = entity.id.split(':');
+                var lastPart = entityIdArray[entityIdArray.length - 1];
+                var entityName = schemaName;
+                if (schemaName != (lastPart + 'Notification')) {
+                    entityName += lastPart;
+                }
+                self.notificationDefinitions[entity.id] = {
+                    'name': entityName,
+                    'schema': entity
+                };
+            }
+
+            if (typeof(value) == 'object') {
+                extractDefinitons(schemaName, value);
+            }
+        });
+    } catch (e) {
+        console.log(e);
+        console.log(e.stack);
+    }
+}
+
+function fixRefs(entity) {
+    // replace $ref values with "#/definitions/type" instead of uri
+    try {
+    	_.forOwn(entity, (property, key) => {
+            if (key == '$ref' && !property.startsWith('#')) {
+                entity[key] = '#/definitions/' + self.notificationDefinitions[property].name;
+            } else if (typeof(property) == 'object') {
+                entity[key] = fixRefs(property);
+            }
+        });
+        return entity;
+    } catch (e) {
+        console.log(e);
+        console.log(e.stack);
+    }
+}
+
+function loadConfig(configPath) {
+	configPath = path.resolve(configPath);
+	var extension = path.parse(configPath).ext.toLowerCase();
+	if (extension == '.yml' || extension == '.yaml') {
+		console.log(`Loading YAML config from ${configPath}`);
+		return yaml.load(path.resolve(configPath));
+	} else {
+		console.log(`Loading JSON config from ${configPath}`);
+		return require(path.resolve(configPath));
+	}
+}
+
 function executeScripts(scripts, phase) {
 	if (!scripts) return;
-	log.info(`Executing ${lenSafe(scripts)} ${phase ? phase.trim() + ' ' : ''}scripts...`);
+	var scriptCount = lenSafe(scripts);
+	log.info(`Executing ${scriptCount} ${phase ? phase.trim() + ' ' : ''}${pluralize('scripts', scriptCount)}...`);
 	_.forEach(scripts, function(script) { executeScript(script); });
 }
 
@@ -388,10 +562,20 @@ function checkAndThrow(haystack, needle, message) {
 		throw new Error(message ? message : `${needle} must be set!`);
 }
 
-function getEnv(varname) {
+function getEnv(varname, defaultValue) {
 	varname = varname.trim();
-	log.silly(`ENV: ${varname}->${process.env[varname]}`);
-	return process.env[varname] ? process.env[varname] : '';
+	var envVar = process.env[varname];
+	log.silly(`ENV: ${varname}->${envVar}`);
+	if (envVar) {
+		if (envVar.toLowerCase() === 'true')
+			return true;
+		else if (envVar.toLowerCase() === 'true')
+			return false;
+		else 
+			return envVar;
+	}
+
+	return defaultValue;
 }
 
 function setEnv(varname, value) {
@@ -410,4 +594,14 @@ function resolveEnvVars(config) {
 			resolveEnvVars(value);
 		}
 	});
+}
+
+function getOverride(name, defaultValue) {
+	var envVar = getEnv(name);
+	if (envVar) {
+		log.info(`Using override for ${name}: ${envVar}`);
+		return envVar;
+	}
+
+	return defaultValue;
 }
