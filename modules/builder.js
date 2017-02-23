@@ -93,6 +93,7 @@ function Builder(configPath, localConfigPath) {
 		}
 
 		// Initialize instance vars
+		log.setUseColor(getEnv('ENABLE_LOGGER_COLOR'));
 		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
 		this.resourcePaths = {
 			extensions: path.join(resourceRoot, 'extensions'),

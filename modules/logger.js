@@ -11,7 +11,7 @@ Logger.prototype.log = new Winston.Logger({
             level: 'silly',
             handleExceptions: true,
             json: false,
-            colorize: true
+            colorize: false
         })
     ]
 });
@@ -22,6 +22,11 @@ Logger.prototype.setLogLevel = function(level) {
 	level = checkLevel(level);
 	this.log.transports.console.level = level;
 	this.log.info(`Log level set to ${level}`);
+};
+
+Logger.prototype.setUseColor = function(useColor) {
+	this.log.transports.console.colorize = useColor === true;
+	this.log.info(`Logger will use color: ${useColor}`);
 };
 
 // Passthrough functions
