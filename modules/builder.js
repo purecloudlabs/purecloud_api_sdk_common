@@ -110,6 +110,9 @@ function Builder(configPath, localConfigPath) {
 		this.releaseNoteTemplatePath = this.config.settings.releaseNoteTemplatePath ? 
 			this.config.settings.releaseNoteTemplatePath : 
 			'./resources/templates/releaseNoteDetail.md';
+		this.releaseNoteSummaryTemplatePath = this.config.settings.releaseNoteSummaryTemplatePath ? 
+			this.config.settings.releaseNoteSummaryTemplatePath : 
+			'./resources/templates/releaseNoteSummary.md';
 
 		// Initialize other things
 		git.authToken = getEnv('GITHUB_TOKEN');
@@ -264,6 +267,11 @@ function prebuildImpl() {
 				// Get release notes
 				log.info('Generating release notes...');
 				self.releaseNotes = swaggerDiff.generateReleaseNotes(self.releaseNoteTemplatePath);
+				self.releaseNoteSummary = swaggerDiff.generateReleaseNotes(self.releaseNoteSummaryTemplatePath);
+
+				var releaseNotePath = path.join(getEnv('SDK_REPO'), 'releaseNotes.md');
+				log.info(`Writing release notes to ${releaseNotePath}`);
+				fs.writeFileSync(releaseNotePath, self.releaseNotes);
 			})
 			.then(() => executeScripts(self.config.stageSettings.prebuild.postRunScripts, 'custom prebuild post-run'))
 			.then(() => deferred.resolve())
@@ -385,7 +393,7 @@ function createRelease() {
 				"tag_name": self.version.displayFull,
 				"target_commitish": self.config.settings.sdkRepo.branch ? self.config.settings.sdkRepo.branch : 'master',
 				"name": self.version.displayFull,
-				"body": `Release notes for version ${self.version.displayFull}\n${self.releaseNotes}`,
+				"body": `Release notes for version ${self.version.displayFull}\n${self.releaseNoteSummary}`,
 				"draft": false,
 				"prerelease": false
 			};
