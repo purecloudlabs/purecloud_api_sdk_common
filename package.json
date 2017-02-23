@@ -43,7 +43,11 @@
       "moment-timezone": ">=0.5.11",
       "json-schema-deref-sync": ">=0.3.3",
       "pluralize": ">=3.1.0",
-      "yamljs": ">=0.2.8"
+      "yamljs": ">=0.2.8",
+      "commander": ">=2.9.0"
   },
-  "homepage": "https://github.com/MyPureCloud/purecloud_api_sdk_common"
+  "homepage": "https://github.com/MyPureCloud/purecloud_api_sdk_common",
+  "bin": {
+    "sdk-builder": "./sdkBuilder.js"
+  }
 }

@@ -2,6 +2,7 @@ const _ = require('lodash');
 const childProcess = require('child_process');
 const deref = require('json-schema-deref-sync');
 const fs = require('fs-extra');
+const githubApi = require('github-api-promise');
 const moment = require('moment-timezone');
 const path = require('path');
 const pluralize = require('pluralize');
@@ -18,16 +19,32 @@ const zip = require('./zip');
 /* PRIVATE VARS */
 
 var newSwaggerTempFile = '';
-var releaseNoteTemplatePath = './resources/templates/releaseNoteSummary.md';
+
+
+/* PUBLIC PROPERTIES */
+
+Builder.prototype.config = {};
+Builder.prototype.repository = {};
+Builder.prototype.resourcePaths = {};
+Builder.prototype.repository = {};
+Builder.prototype.releaseNoteTemplatePath = '';
 
 
 /* CONSTRUCTOR */
 
 function Builder(configPath, localConfigPath) {
 	try {
+		log.writeBox('Constructing Builder');
+
 		// Load config files
-		this.config = deref(loadConfig(configPath));
-		this.localConfig = deref(loadConfig(localConfigPath));
+		if (fs.existsSync(configPath))
+			this.config = deref(loadConfig(configPath));
+		else
+			throw new Error(`Config file doesn't exist! Path: ${configPath}`);
+		if (fs.existsSync(localConfigPath))
+			this.localConfig = deref(loadConfig(localConfigPath));
+		else
+			log.warn(`No local config provided. Path: ${localConfigPath}`);
 
 		// Initialize self reference
 		self = this;
@@ -39,7 +56,7 @@ function Builder(configPath, localConfigPath) {
 
 		// Checketh thyself before thou wrecketh thyself
 		maybeInit(this, 'config', {});
-		maybeInit(this.config, 'version', {major:0,minor:0,point:0,prerelease:''}, 'Version not set. Initializing to 0.0.0');
+		maybeInit(this, 'localConfig', {});
 		maybeInit(this.config, 'settings', {});
 		maybeInit(this.config.settings, 'swagger', {});
 		maybeInit(this.config, 'stageSettings', {});
@@ -53,6 +70,7 @@ function Builder(configPath, localConfigPath) {
 		checkAndThrow(this.config.settings.swagger, 'newSwaggerPath');
 
 		// Set env vars
+		setEnv('COMMON_ROOT', path.resolve('./'));
 		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.language)));
 		fs.removeSync(getEnv('SDK_REPO'));
 		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.language)));
@@ -74,10 +92,6 @@ function Builder(configPath, localConfigPath) {
 			log.debug('Config file: \n' + JSON.stringify(this.config,null,2));
 		}
 
-		// Process override settings
-		this.skipCommit = getOverride('SKIP_COMMIT', false);
-		this.excludeNotifications = getOverride('EXCLUDE_NOTIFICATIONS', false);
-
 		// Initialize instance vars
 		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
 		this.resourcePaths = {
@@ -89,20 +103,20 @@ function Builder(configPath, localConfigPath) {
 		this.pureCloud = {
 			clientId: getEnv('PURECLOUD_CLIENT_ID'),
 			clientSecret: getEnv('PURECLOUD_CLIENT_SECRET'),
-			environment: getOverride('PURECLOUD_ENVIRONMENT', 'mypurecloud.com')
+			environment: getEnv('PURECLOUD_ENVIRONMENT', 'mypurecloud.com', true)
 		};
 		this.notificationDefinitions = {};
+		this.releaseNoteTemplatePath = this.config.settings.releaseNoteTemplatePath ? 
+			this.config.settings.releaseNoteTemplatePath : 
+			'./resources/templates/releaseNoteDetail.md';
+
+		// Initialize other things
+		git.authToken = getEnv('GITHUB_TOKEN');
 	} catch(err) {
 		console.log(err);
 		throw err;
 	}
 }
-
-
-/* PUBLIC PROPERTIES */
-
-Builder.prototype.config = {};
-Builder.prototype.repository = {};
 
 
 /* PUBLIC FUNCTIONS */
@@ -227,8 +241,8 @@ function prebuildImpl() {
 				};
 
 				if (self.config.settings.versionFile) {
-					if (!fs.existsSync(self.config.settings.versionFile)) {
-						self.version = fs.readFileSync(self.config.settings.versionFile, 'utf8');
+					if (fs.existsSync(self.config.settings.versionFile)) {
+						self.version = JSON.parse(fs.readFileSync(self.config.settings.versionFile, 'utf8'));
 					} else {
 						log.warn(`Version file not found: ${self.config.settings.versionFile}`);
 					}
@@ -248,7 +262,7 @@ function prebuildImpl() {
 			.then(function() {
 				// Get release notes
 				log.info('Generating release notes...');
-				self.releaseNotes = swaggerDiff.generateReleaseNotes(releaseNoteTemplatePath);
+				self.releaseNotes = swaggerDiff.generateReleaseNotes(self.releaseNoteTemplatePath);
 			})
 			.then(() => executeScripts(self.config.stageSettings.prebuild.postRunScripts, 'custom prebuild post-run'))
 			.then(() => deferred.resolve())
@@ -328,7 +342,7 @@ function postbuildImpl() {
 		// Pre-run scripts
 		executeScripts(self.config.stageSettings.postbuild.preRunScripts, 'custom postbuild pre-run');
 
-		deleteme()
+		createRelease()
 			.then(() => executeScripts(self.config.stageSettings.postbuild.postRunScripts, 'custom postbuild post-run'))
 			.then(() => deferred.resolve())
 			.catch((err) => deferred.reject(err));
@@ -339,23 +353,62 @@ function postbuildImpl() {
 	return deferred.promise;
 }
 
-function deleteme() {
+
+/* PRIVATE FUNCTIONS */
+
+function createRelease() {
 	var deferred = Q.defer();
 
-	deferred.resolve();
+	if (self.config.stageSettings.postbuild.publishRelease !== true) {
+		log.warn('Skipping git commit and release creation! Set postbuild.publishRelease=true to release.');
+		deferred.resolve();
+		return deferred.promise;
+	}
+
+	git.saveChanges(self.config.settings.sdkRepo.repo, getEnv('SDK_REPO'), self.version.displayFull)
+		.then(() => {
+			// Expected format: https://github.com/grouporuser/reponame
+			var repoParts = self.config.settings.sdkRepo.repo.split('/');
+			var repoName = repoParts[repoParts.length - 1];
+			var repoOwner = repoParts[repoParts.length - 2];
+			if (repoName.endsWith('.git'))
+				repoName = repoName.substring(0, repoName.length - 4);
+			log.debug(`repoName: ${repoName}`);
+			log.debug(`repoOwner: ${repoOwner}`);
+
+			githubApi.config.repo = repoName;
+			githubApi.config.owner = repoOwner;
+			githubApi.config.token = getEnv('GITHUB_TOKEN');
+
+		    var createReleaseOptions = {
+				"tag_name": self.version.displayFull,
+				"target_commitish": self.config.settings.sdkRepo.branch ? self.config.settings.sdkRepo.branch : 'master',
+				"name": self.version.displayFull,
+				"body": `Release notes for version ${self.version.displayFull}\n${self.releaseNotes}`,
+				"draft": false,
+				"prerelease": false
+			};
+
+			// Create release
+			return githubApi.repos.releases.createRelease(createReleaseOptions);
+		})
+		.then((release) => {
+	    	log.info(`Created release #${release.id}, \
+	    		${release.name}, tag: ${release.tag_name}, \
+	    		published on ${release.published_at}`);
+		})
+		.then(() => deferred.resolve())
+		.catch((err) => deferred.reject(err));
 
 	return deferred.promise;
 }
-
-
-/* PRIVATE FUNCTIONS */
 
 function addNotifications() {
 	var deferred = Q.defer();
 
 	try {
 		// Skip notifications
-		if (self.excludeNotifications === true) {
+		if (getEnv('EXCLUDE_NOTIFICATIONS') === true) {
 			log.info('Not adding notifications to schema');
 			deferred.resolve();
 			return deferred.promise;
@@ -404,7 +457,7 @@ function addNotifications() {
                 });
 
                 // Write mappings to file
-                var mappingFilePath = path.resolve(path.join(getEnv('SDK_TEMP'), 'notificationMappings.json'));
+                var mappingFilePath = path.resolve(path.join(getEnv('SDK_REPO'), 'notificationMappings.json'));
                 log.info(`Writing Notification mappings to ${mappingFilePath}`);
                 fs.writeFileSync(mappingFilePath, JSON.stringify(notificationMappings, null, 2));
 
@@ -465,10 +518,10 @@ function loadConfig(configPath) {
 	configPath = path.resolve(configPath);
 	var extension = path.parse(configPath).ext.toLowerCase();
 	if (extension == '.yml' || extension == '.yaml') {
-		console.log(`Loading YAML config from ${configPath}`);
+		log.info(`Loading YAML config from ${configPath}`);
 		return yaml.load(path.resolve(configPath));
 	} else {
-		console.log(`Loading JSON config from ${configPath}`);
+		log.info(`Loading JSON config from ${configPath}`);
 		return require(path.resolve(configPath));
 	}
 }
@@ -562,10 +615,17 @@ function checkAndThrow(haystack, needle, message) {
 		throw new Error(message ? message : `${needle} must be set!`);
 }
 
-function getEnv(varname, defaultValue) {
+function getEnv(varname, defaultValue, isDefaultValue) {
 	varname = varname.trim();
 	var envVar = process.env[varname];
 	log.silly(`ENV: ${varname}->${envVar}`);
+	if (!envVar && defaultValue) {
+		envVar = defaultValue;
+		if (isDefaultValue === true)
+			log.info(`Using default value for ${varname}: ${envVar}`);
+		else
+			log.warn(`Using override for ${varname}: ${envVar}`);
+	}
 	if (envVar) {
 		if (envVar.toLowerCase() === 'true')
 			return true;
@@ -594,14 +654,4 @@ function resolveEnvVars(config) {
 			resolveEnvVars(value);
 		}
 	});
-}
-
-function getOverride(name, defaultValue) {
-	var envVar = getEnv(name);
-	if (envVar) {
-		log.info(`Using override for ${name}: ${envVar}`);
-		return envVar;
-	}
-
-	return defaultValue;
 }

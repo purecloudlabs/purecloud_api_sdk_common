@@ -5,8 +5,8 @@
   },
   "settings": {
     "sdkRepo": {
-      "repo": "https://github.com/MyPureCloud/purecloud_api_sdk_java.git",
-      "branch": "sdkv1"
+      "repo": "https://github.com/MyPureCloud/sdk_test",
+      "branch": "master"
     },
     "versionFile": "${SDK_REPO}/version.json",
     "logLevel": "debug",
@@ -18,10 +18,11 @@
     },
     "swaggerCodegen": {
       "language": "purecloudjava",
-      "jarPath": "/git/swagger-codegen/modules/swagger-codegen-cli/target/swagger-codegen-cli.jar",
+      "jarPath": "${WORKSPACE}/swagger-codegen/modules/swagger-codegen-cli/target/swagger-codegen-cli.jar",
       "configFile": "${SDK_TEMP}/config.json",
       "extraGeneratorOptions": []
     },
+    "releaseNoteTemplatePath": "${COMMON_ROOT}/resources/templates/githubSdkReleaseNotes.md",
     "debugConfig": false
   },
   "stageSettings": {
@@ -84,6 +85,7 @@
       ]
     },
     "postbuild": {
+    	"publishRelease": true,
       "preRunScripts": [
         {
           "type": "node",

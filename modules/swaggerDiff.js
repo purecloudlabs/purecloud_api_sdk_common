@@ -2,6 +2,7 @@ const fs = require('fs');
 const _ = require('lodash');
 const childProcess = require('child_process');
 const dot = require('dot');
+const pluralize = require('pluralize');
 
 const log = require('./logger');
 
@@ -167,7 +168,8 @@ SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
     var defs = {
         changes: changesData,
         swaggerInfo: this.swaggerInfo,
-        data: data
+        data: data,
+        pluralize: pluralize
     };
 
     // Compile template
