@@ -24,6 +24,9 @@ then
 	exit 1
 fi
 
+# Add maven to PATH
+export PATH=$PATH:/usr/local/maven/bin
+
 # CD to build dir
 cd $BUILD_DIR
 
