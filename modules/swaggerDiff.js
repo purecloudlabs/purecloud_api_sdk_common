@@ -193,6 +193,7 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
     if (forceMajor === true || _.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_MAJOR] ? changeGroup[IMPACT_MAJOR].length > 0 : false;
     })) {
+        log.info('Increment version: major');
         version.major++;
         version.minor = 0;
         version.point = 0;
@@ -201,6 +202,7 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
     else if (forceMinor === true || _.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_MINOR] ? changeGroup[IMPACT_MINOR].length > 0 : false;
     })) {
+        log.info('Increment version: minor');
         version.minor++;
         version.point = 0;
     }
@@ -208,6 +210,7 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
     else if (forcePoint === true || _.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_POINT] ? changeGroup[IMPACT_POINT].length > 0 : false;
     })) {
+        log.info('Increment version: point');
         version.point++;
     }
 
