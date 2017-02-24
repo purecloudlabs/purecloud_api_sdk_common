@@ -185,9 +185,9 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
     var forceMajor = getEnv('INCREMENT_MAJOR', false, true);
     var forceMinor = getEnv('INCREMENT_MINOR', false, true);
     var forcePoint = getEnv('INCREMENT_POINT', false, true);
-    if (forceMajor) log.warn('Forcing major release!');
-    if (forceMinor) log.warn('Forcing major release!');
-    if (forcePoint) log.warn('Forcing major release!');
+    if (forceMajor === true) log.warn('Forcing major release!');
+    if (forceMinor === true) log.warn('Forcing minor release!');
+    if (forcePoint === true) log.warn('Forcing point release!');
 
     // Major
     if (forceMajor === true || _.find(this.changes, function(changeGroup) {
