@@ -31,22 +31,6 @@ Builder.prototype.resourcePaths = {};
 Builder.prototype.repository = {};
 Builder.prototype.releaseNoteTemplatePath = '';
 
-function applyOverrides(original, overrides) {
-	if (!original || !overrides)
-		return;
-
-	_.forOwn(overrides, function(value, key) {
-		if (typeof(value) == 'object') {
-			// Initialize original to ensure the full path to the override values
-			if (!original[key])
-				original[key] = {};
-			applyOverrides(original[key], value);
-		} else {
-			log.verbose(`Overriding ${key}, old: ${original[key]}, new: ${value}`);
-			original[key] = value;
-		}
-	});
-}
 
 /* CONSTRUCTOR */
 
@@ -289,10 +273,14 @@ function prebuildImpl() {
 				}
 			})
 			.then(function() {
+				// Get extra release note data
+				var data = { extraNotes: getEnv('RELEASE_NOTES') };
+				data.hasExtraNotes = data.extraNotes !== undefined;
+
 				// Get release notes
 				log.info('Generating release notes...');
-				self.releaseNotes = swaggerDiff.generateReleaseNotes(self.releaseNoteTemplatePath);
-				self.releaseNoteSummary = swaggerDiff.generateReleaseNotes(self.releaseNoteSummaryTemplatePath);
+				self.releaseNotes = swaggerDiff.generateReleaseNotes(self.releaseNoteTemplatePath, data);
+				self.releaseNoteSummary = swaggerDiff.generateReleaseNotes(self.releaseNoteSummaryTemplatePath, data);
 
 				var releaseNotePath = path.join(getEnv('SDK_REPO'), 'releaseNotes.md');
 				log.info(`Writing release notes to ${releaseNotePath}`);
@@ -389,6 +377,23 @@ function postbuildImpl() {
 
 
 /* PRIVATE FUNCTIONS */
+
+function applyOverrides(original, overrides) {
+	if (!original || !overrides)
+		return;
+
+	_.forOwn(overrides, function(value, key) {
+		if (typeof(value) == 'object') {
+			// Initialize original to ensure the full path to the override values
+			if (!original[key])
+				original[key] = {};
+			applyOverrides(original[key], value);
+		} else {
+			log.verbose(`Overriding ${key}: ${original[key]} => ${value}`);
+			original[key] = value;
+		}
+	});
+}
 
 function createRelease() {
 	var deferred = Q.defer();
