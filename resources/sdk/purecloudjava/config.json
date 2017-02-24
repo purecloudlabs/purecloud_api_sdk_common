@@ -90,6 +90,7 @@
       ]
     },
     "postbuild": {
+      "gitCommit": true,
       "publishRelease": true,
       "preRunScripts": [
         {
