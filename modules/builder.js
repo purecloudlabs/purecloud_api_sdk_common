@@ -31,6 +31,22 @@ Builder.prototype.resourcePaths = {};
 Builder.prototype.repository = {};
 Builder.prototype.releaseNoteTemplatePath = '';
 
+function applyOverrides(original, overrides) {
+	if (!original || !overrides)
+		return;
+
+	_.forOwn(overrides, function(value, key) {
+		if (typeof(value) == 'object') {
+			// Initialize original to ensure the full path to the override values
+			if (!original[key])
+				original[key] = {};
+			applyOverrides(original[key], value);
+		} else {
+			log.verbose(`Overriding ${key}, old: ${original[key]}, new: ${value}`);
+			original[key] = value;
+		}
+	});
+}
 
 /* CONSTRUCTOR */
 
@@ -47,6 +63,10 @@ function Builder(configPath, localConfigPath) {
 			this.localConfig = deref(loadConfig(localConfigPath));
 		else
 			log.warn(`No local config provided. Path: ${localConfigPath}`);
+
+		// Apply overrides
+		log.info('Applying overrides...');
+		applyOverrides(this.config, this.localConfig.overrides);
 
 		// Initialize self reference
 		self = this;
@@ -71,6 +91,14 @@ function Builder(configPath, localConfigPath) {
 		checkAndThrow(this.config.settings.swagger, 'oldSwaggerPath');
 		checkAndThrow(this.config.settings.swagger, 'newSwaggerPath');
 
+		// Normalize sdkRepo
+		if (typeof(this.config.settings.sdkRepo) === 'string') {
+			this.config.settings.sdkRepo = {
+				repo: this.config.settings.sdkRepo,
+				branch: ''
+			};
+		}
+
 		// Set env vars
 		setEnv('COMMON_ROOT', path.resolve('./'));
 		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.language)));
@@ -94,8 +122,8 @@ function Builder(configPath, localConfigPath) {
 			log.debug('Config file: \n' + JSON.stringify(this.config,null,2));
 		}
 
-		// Initialize instance vars
-		log.setUseColor(getEnv('ENABLE_LOGGER_COLOR'));
+		// Initialize instance settings
+		log.setUseColor(this.config.settings.enableLoggerColor === true);
 		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
 		this.resourcePaths = {
 			extensions: path.resolve(this.config.settings.resourcePaths.extensions ? 
@@ -206,22 +234,10 @@ function prebuildImpl() {
 		// Pre-run scripts
 		executeScripts(self.config.stageSettings.prebuild.preRunScripts, 'custom prebuild pre-run');
 
-		// Prepare for repo clone
-		var sdkRepo = self.config.settings.sdkRepo;
-		var repo, branch;
-
-		// Check for basic or extended config
-		if (typeof(sdkRepo) == 'string') {
-			repo = sdkRepo;
-		} else {
-			repo = sdkRepo.repo;
-			branch = sdkRepo.branch;
-		}
-
 		// Clone repo
 		var startTime = moment();
-		log.info(`Cloning ${repo} (${branch}) to ${getEnv('SDK_REPO')}`);
-		git.clone(repo, branch, getEnv('SDK_REPO'))
+		log.info(`Cloning ${self.config.settings.sdkRepo.repo} (${self.config.settings.sdkRepo.branch}) to ${getEnv('SDK_REPO')}`);
+		git.clone(self.config.settings.sdkRepo.repo, self.config.settings.sdkRepo.branch, getEnv('SDK_REPO'))
 			.then(function(repository) {
 				log.debug(`Clone operation completed in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
 				self.repository = repository;
