@@ -18,8 +18,6 @@ const zip = require('./zip');
 
 /* PRIVATE VARS */
 
-const ABORT_PROMISE = 'abort the promise chain please';
-
 var newSwaggerTempFile = '';
 
 
@@ -264,11 +262,21 @@ function prebuildImpl() {
 				}
 
 				// Increment version in config
-				log.debug(`Previous version: ${swaggerDiff.stringifyVersion(self.version)}`);
+				var oldVersion = swaggerDiff.stringifyVersion(self.version, true);
+				log.debug(`Previous version: ${oldVersion}`);
 				swaggerDiff.incrementVersion(self.version);
-				log.info(`New version: ${self.version.displayFull}`);
+				var newVersion = swaggerDiff.stringifyVersion(self.version, true);
+				
+				// Determine if new version
+				self.isNewVersion = oldVersion === newVersion;
+				setEnv('SDK_NEW_VERSION', self.isNewVersion);
+				if (self.isNewVersion === true)
+					log.info(`New version: ${self.version.displayFull}`);
+				else
+					log.warn('Version was not incremented');
 
-				if (self.config.settings.versionFile) {
+				// Write new version to file
+				if (self.isNewVersion === true && self.config.settings.versionFile) {
 					fs.writeFileSync(self.config.settings.versionFile, JSON.stringify(self.version, null, 2));
 				}
 			})
@@ -408,6 +416,12 @@ function createRelease() {
 		.then(() => {
 			if (self.config.stageSettings.postbuild.publishRelease !== true) {
 				log.warn('Skipping github release creation! Set postbuild.publishRelease=true to release.');
+				deferred.resolve();
+				return deferred.promise;
+			}
+
+			if (self.isNewVersion !== true) {
+				log.warn('Skipping github release creation! Build did not produce a new version.');
 				deferred.resolve();
 				return deferred.promise;
 			}
