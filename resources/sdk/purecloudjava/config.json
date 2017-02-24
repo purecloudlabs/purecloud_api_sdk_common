@@ -1,7 +1,7 @@
 {
   "name": "Java SDK",
   "envVars": {
-    "OPERATION_ID_PROPERTY":"x-inin-method-name"
+    "OPERATION_ID_PROPERTY": "x-inin-method-name"
   },
   "settings": {
     "sdkRepo": {
@@ -33,7 +33,7 @@
           "type": "node",
           "path": "test.js",
           "args": [
-          	"prebuild-prerun"
+            "prebuild-prerun"
           ],
           "failOnError": true
         }
@@ -43,9 +43,13 @@
           "type": "node",
           "path": "prebuild-postrun.js",
           "args": [
-          	{ "$ref": "#/settings/swaggerCodegen/configFile" },
-          	{ "$ref": "#/settings/versionFile" },
-          	"platform-client"
+            {
+              "$ref": "#/settings/swaggerCodegen/configFile"
+            },
+            {
+              "$ref": "#/settings/versionFile"
+            },
+            "platform-client"
           ],
           "failOnError": true
         }
@@ -57,7 +61,7 @@
           "type": "node",
           "path": "test.js",
           "args": [
-          	"build-prerun"
+            "build-prerun"
           ],
           "failOnError": true
         }
@@ -67,10 +71,10 @@
           "type": "shell",
           "path": "compile.sh",
           "args": [
-          	"verify",
-          	"${SDK_REPO}/build",
-          	"${WORKSPACE}/settings.xml",
-          	"${DPGP_PASSPHRASE}"
+            "verify",
+            "${SDK_REPO}/build",
+            "${WORKSPACE}/settings.xml",
+            "${DPGP_PASSPHRASE}"
           ]
         }
       ],
@@ -79,20 +83,20 @@
           "type": "node",
           "path": "test.js",
           "args": [
-          	"build-postrun"
+            "build-postrun"
           ],
           "failOnError": true
         }
       ]
     },
     "postbuild": {
-    	"publishRelease": true,
+      "publishRelease": true,
       "preRunScripts": [
         {
           "type": "node",
           "path": "test.js",
           "args": [
-          	"postbuild-prerun"
+            "postbuild-prerun"
           ],
           "failOnError": true
         }
@@ -102,7 +106,7 @@
           "type": "node",
           "path": "test.js",
           "args": [
-          	"postbuild-postrun"
+            "postbuild-postrun"
           ],
           "failOnError": true
         }
