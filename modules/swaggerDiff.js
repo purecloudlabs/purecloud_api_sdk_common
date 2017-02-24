@@ -182,8 +182,15 @@ SwaggerDiff.prototype.generateReleaseNotes = function(template, data) {
 };
 
 SwaggerDiff.prototype.incrementVersion = function(version) {
+    var forceMajor = getEnv('INCREMENT_MAJOR', false, true);
+    var forceMinor = getEnv('INCREMENT_MINOR', false, true);
+    var forcePoint = getEnv('INCREMENT_POINT', false, true);
+    if (forceMajor) log.warn('Forcing major release!');
+    if (forceMinor) log.warn('Forcing major release!');
+    if (forcePoint) log.warn('Forcing major release!');
+
     // Major
-    if (_.find(this.changes, function(changeGroup) {
+    if (forceMajor === true || _.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_MAJOR] ? changeGroup[IMPACT_MAJOR].length > 0 : false;
     })) {
         version.major++;
@@ -191,14 +198,14 @@ SwaggerDiff.prototype.incrementVersion = function(version) {
         version.point = 0;
     }
     // Minor
-    else if (_.find(this.changes, function(changeGroup) {
+    else if (forceMinor === true || _.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_MINOR] ? changeGroup[IMPACT_MINOR].length > 0 : false;
     })) {
         version.minor++;
         version.point = 0;
     }
     // Point
-    else if (_.find(this.changes, function(changeGroup) {
+    else if (forcePoint === true || _.find(this.changes, function(changeGroup) {
         return changeGroup[IMPACT_POINT] ? changeGroup[IMPACT_POINT].length > 0 : false;
     })) {
         version.point++;
@@ -498,4 +505,27 @@ function checkModels(oldSwagger, newSwagger) {
             });
         }
     });
+}
+
+function getEnv(varname, defaultValue, isDefaultValue) {
+    varname = varname.trim();
+    var envVar = process.env[varname];
+    log.silly(`ENV: ${varname}->${envVar}`);
+    if (!envVar && defaultValue) {
+        envVar = defaultValue;
+        if (isDefaultValue === true)
+            log.info(`Using default value for ${varname}: ${envVar}`);
+        else
+            log.warn(`Using override for ${varname}: ${envVar}`);
+    }
+    if (envVar) {
+        if (envVar.toLowerCase() === 'true')
+            return true;
+        else if (envVar.toLowerCase() === 'true')
+            return false;
+        else 
+            return envVar;
+    }
+
+    return defaultValue;
 }

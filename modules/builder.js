@@ -18,6 +18,8 @@ const zip = require('./zip');
 
 /* PRIVATE VARS */
 
+const ABORT_PROMISE = 'abort the promise chain please';
+
 var newSwaggerTempFile = '';
 
 
@@ -96,10 +98,17 @@ function Builder(configPath, localConfigPath) {
 		log.setUseColor(getEnv('ENABLE_LOGGER_COLOR'));
 		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
 		this.resourcePaths = {
-			extensions: path.join(resourceRoot, 'extensions'),
-			scripts: path.join(resourceRoot, 'scripts'),
-			templates: path.join(resourceRoot, 'templates')
+			extensions: path.resolve(this.config.settings.resourcePaths.extensions ? 
+				this.config.settings.resourcePaths.extensions : 
+				path.join(resourceRoot, 'extensions')),
+			scripts: path.resolve(this.config.settings.resourcePaths.scripts ? 
+				this.config.settings.resourcePaths.scripts : 
+				path.join(resourceRoot, 'scripts')),
+			templates: path.resolve(this.config.settings.resourcePaths.templates ? 
+				this.config.settings.resourcePaths.templates : 
+				path.join(resourceRoot, 'templates'))
 		};
+		log.debug(`Resource paths: ${JSON.stringify(this.resourcePaths, null, 2)}`);
 		newSwaggerTempFile = path.join(getEnv('SDK_TEMP'), 'newSwagger.json');
 		this.pureCloud = {
 			clientId: getEnv('PURECLOUD_CLIENT_ID'),
@@ -368,14 +377,20 @@ function postbuildImpl() {
 function createRelease() {
 	var deferred = Q.defer();
 
-	if (self.config.stageSettings.postbuild.publishRelease !== true) {
-		log.warn('Skipping git commit and release creation! Set postbuild.publishRelease=true to release.');
+	if (self.config.stageSettings.postbuild.gitCommit !== true) {
+		log.warn('Skipping git commit and github release creation! Set postbuild.gitCommit=true to commit changes.');
 		deferred.resolve();
 		return deferred.promise;
 	}
 
 	git.saveChanges(self.config.settings.sdkRepo.repo, getEnv('SDK_REPO'), self.version.displayFull)
 		.then(() => {
+			if (self.config.stageSettings.postbuild.publishRelease !== true) {
+				log.warn('Skipping github release creation! Set postbuild.publishRelease=true to release.');
+				deferred.resolve();
+				return deferred.promise;
+			}
+
 			// Expected format: https://github.com/grouporuser/reponame
 			var repoParts = self.config.settings.sdkRepo.repo.split('/');
 			var repoName = repoParts[repoParts.length - 1];
@@ -547,31 +562,27 @@ function executeScript(script) {
 	var startTime = moment();
 
 	try {
-		var scriptPath = script.path;
-		if (!path.parse(scriptPath).dir)
-			scriptPath = path.join('./resources/sdk', self.config.settings.swaggerCodegen.language, 'scripts', script.path);
-		scriptPath = path.resolve(scriptPath);
-
 		var args = script.args ? script.args.slice() : [];
-		args.unshift(scriptPath);
-
-		log.verbose(`Executing ${script.type} script: ${args.join(' ')}`);
-
-		if (!fs.existsSync(scriptPath)) {
-			var msg = `Script not found: ${scriptPath}`;
-			var error = new Error(msg);
-			error.error = msg;
-			error.status = 999;
-			throw error;
-		}
+		var options = {stdio:'inherit'};
+		if (script.cwd)
+			options['cwd'] = path.resolve(script.cwd);
 
 		switch (script.type.toLowerCase()) {
 			case 'node': {
-				code = childProcess.execFileSync('node', args, {stdio:'inherit'});
+				args.unshift(getScriptPath(script));
+				log.verbose(`Executing node script: ${args.join(' ')}`);
+				code = childProcess.execFileSync('node', args, options);
 				break;
 			}
 			case 'shell': {
-				code = childProcess.execFileSync('sh', args, {stdio:'inherit'});
+				args.unshift(getScriptPath(script));
+				log.verbose(`Executing shell script: ${args.join(' ')}`);
+				code = childProcess.execFileSync('sh', args, options);
+				break;
+			}
+			case 'command': {
+				log.verbose(`Executing command: ${script.command} ${args.join(' ')}`);
+				code = childProcess.execFileSync(script.command, args, options);
 				break;
 			}
 			default: {
@@ -583,6 +594,9 @@ function executeScript(script) {
 		if (!code || code === null)
 			code = 0;
 	} catch (err) {
+		if (err.message)
+			log.error(err.message);
+
 		if (err.error)
 			log.error(err.error);
 
@@ -600,6 +614,23 @@ function executeScript(script) {
 		log.verbose(completedMessage);
 		return code;
 	}
+}
+
+function getScriptPath(script) {
+	var scriptPath = script.path;
+	if (!path.parse(scriptPath).dir)
+		scriptPath = path.join('./resources/sdk', self.config.settings.swaggerCodegen.language, 'scripts', script.path);
+	scriptPath = path.resolve(scriptPath);
+
+	if (!fs.existsSync(scriptPath)) {
+		var msg = `Script not found: ${scriptPath}`;
+		var error = new Error(msg);
+		error.error = msg;
+		error.status = 999;
+		throw error;
+	}
+
+	return scriptPath;
 }
 
 function lenSafe(arr) {
@@ -648,9 +679,11 @@ function getEnv(varname, defaultValue, isDefaultValue) {
 }
 
 function setEnv(varname, value) {
+	var values = [ value ];
+	resolveEnvVars(values);
 	varname = varname.trim();
-	log.silly(`ENV: ${varname}=${value}`);
-	process.env[varname] = value;
+	log.silly(`ENV: ${varname}=${values[0]}`);
+	process.env[varname] = values[0];
 }
 
 function resolveEnvVars(config) {
