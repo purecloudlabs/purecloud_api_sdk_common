@@ -1,7 +1,6 @@
-{{ if ({{#def.data.hasExtraNotes}} === true) { }}}
+{{ if ({{#def.data.hasExtraNotes === true}}) { }}
 {{#def.data.extraNotes}}
-
-{{ } }
+{{ } }}
 # Changes in this version
 
 * Major changes: {{=it.changes.majorCount}}
