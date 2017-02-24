@@ -268,7 +268,7 @@ function prebuildImpl() {
 				var newVersion = swaggerDiff.stringifyVersion(self.version, true);
 				
 				// Determine if new version
-				self.isNewVersion = oldVersion === newVersion;
+				self.isNewVersion = oldVersion !== newVersion;
 				setEnv('SDK_NEW_VERSION', self.isNewVersion);
 				if (self.isNewVersion === true)
 					log.info(`New version: ${self.version.displayFull}`);
