@@ -1,4 +1,4 @@
-BUILD_MODE=$1
+BUILD_MODE=$1 # package/verify/deploy/deploy:deploy
 BUILD_DIR=$2
 MAVEN_SETTINGS_FILE=$3
 DPGP_PASSPHRASE=$4
@@ -16,12 +16,6 @@ fi
 if [ ! -z "$DPGP_PASSPHRASE" ]
 then
 	DPGP_PASSPHRASE="-Dgpg.passphrase=$DPGP_PASSPHRASE"
-fi
-
-if [ ! "$BUILD_MODE" = "verify" ] && [ ! "$BUILD_MODE" = "deploy" ] && [ ! "$BUILD_MODE" = "package" ]
-then
-	echo "Unknown build mode $BUILD_MODE"
-	exit 1
 fi
 
 # Add maven to PATH

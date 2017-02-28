@@ -50,7 +50,7 @@
             {
               "$ref": "#/settings/versionFile"
             },
-            "platform-client"
+            "platform-client-v2"
           ],
           "failOnError": true
         }
