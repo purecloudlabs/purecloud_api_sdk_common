@@ -357,10 +357,6 @@ function buildImpl() {
 
 		log.info('Zipping docs...');
 		zip.zipDir(path.join(outputDir, 'docs'), path.join(getEnv('SDK_TEMP'), 'docs.zip'))
-			.then(function() {
-				log.info('Committing SDK repo...');
-				// TODO: commit to git
-			})
 			.then(() => executeScripts(self.config.stageSettings.build.postRunScripts, 'custom build post-run'))
 			.then(() => deferred.resolve())
 			.catch((err) => deferred.reject(err));
