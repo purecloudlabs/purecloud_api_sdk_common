@@ -38,17 +38,23 @@ function Builder(configPath, localConfigPath) {
 
 		// Load config files
 		if (fs.existsSync(configPath))
-			this.config = deref(loadConfig(configPath));
+			this.config = loadConfig(configPath);
 		else
 			throw new Error(`Config file doesn't exist! Path: ${configPath}`);
+
 		if (fs.existsSync(localConfigPath))
-			this.localConfig = deref(loadConfig(localConfigPath));
+			this.localConfig = loadConfig(localConfigPath);
 		else
 			log.warn(`No local config provided. Path: ${localConfigPath}`);
 
 		// Apply overrides
 		log.info('Applying overrides...');
 		applyOverrides(this.config, this.localConfig.overrides);
+
+		// Dereference config files
+		log.info('Dereferencing config files...');
+		this.config = deref(this.config);
+		this.localConfig = deref(this.localConfig);
 
 		// Initialize self reference
 		self = this;
@@ -601,6 +607,12 @@ function executeScript(script) {
 		var options = {stdio:'inherit'};
 		if (script.cwd)
 			options['cwd'] = path.resolve(script.cwd);
+
+		if (script.appendIsNewReleaseArg === true)
+			args.push(self.isNewVersion);
+
+		if (script.appendVersionArg === true)
+			args.push(self.version.displayFull);
 
 		switch (script.type.toLowerCase()) {
 			case 'node': {

@@ -18,6 +18,12 @@ then
 	DPGP_PASSPHRASE="-Dgpg.passphrase=$DPGP_PASSPHRASE"
 fi
 
+if [ ! "$BUILD_MODE" = "package" ] && [ ! "$BUILD_MODE" = "verify" ] && [ ! "$BUILD_MODE" = "deploy" ]
+then
+	echo "Unknown build mode $BUILD_MODE"
+	exit 1
+fi
+
 # Add maven to PATH
 export PATH=$PATH:/usr/local/maven/bin
 
