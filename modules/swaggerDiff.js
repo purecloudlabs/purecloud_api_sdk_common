@@ -240,7 +240,7 @@ SwaggerDiff.prototype.overwriteOperationId = function(swagger, operationIdName) 
         // Iterate operations
         _.forEach(path, function(operation, methodKey) {
             if (operation[operationIdName]) {
-                log.verbose(`Overwriting operation ID for ${methodKey} ${pathKey}:\n  operationId=${operation.operationId}\n  ${operationIdName}=${operation[operationIdName]}`);
+                log.silly(`Overwriting operation ID for ${methodKey} ${pathKey}:\n  operationId=${operation.operationId}\n  ${operationIdName}=${operation[operationIdName]}`);
                 operation.operationId = operation[operationIdName];
             }
         });
