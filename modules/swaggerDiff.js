@@ -52,7 +52,7 @@ SwaggerDiff.prototype.newSwagger = {};
 
 /* PUBLIC FUNCTIONS */
 
-SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, saveOldSwaggerPath, saveNewSwaggerPath) {
+SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, saveOldSwaggerPath, saveNewSwaggerPath, operationIdProperty) {
     // Retrieve old swagger
     if (fs.existsSync(oldSwaggerPath)) {
         log.info(`Loading old swagger from disk: ${oldSwaggerPath}`);
@@ -78,6 +78,13 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, save
     }
 
     log.debug(`New swagger length: ${JSON.stringify(this.newSwagger).length}`);
+
+    // Override operation ID
+    if (operationIdProperty) {
+        log.info(`Overriding operationId with property ${operationIdProperty}`);
+        this.overwriteOperationId(this.oldSwagger, operationIdProperty);
+        this.overwriteOperationId(this.newSwagger, operationIdProperty);
+    }
 
     // Save files to disk
     if (saveOldSwaggerPath) {
@@ -227,6 +234,19 @@ SwaggerDiff.prototype.stringifyVersion = function(version, includePrerelease) {
             '');
 };
 
+SwaggerDiff.prototype.overwriteOperationId = function(swagger, operationIdName) {
+    // Iterate paths
+    _.forEach(swagger.paths, function(path, pathKey) {
+        // Iterate operations
+        _.forEach(path, function(operation, methodKey) {
+            if (operation[operationIdName]) {
+                log.verbose(`Overwriting operation ID for ${methodKey} ${pathKey}:\n  operationId=${operation.operationId}\n  ${operationIdName}=${operation[operationIdName]}`);
+                operation.operationId = operation[operationIdName];
+            }
+        });
+    });
+};
+
 
 /* EXPORT MODULE */
 
@@ -321,14 +341,12 @@ function checkOperations(oldSwagger, newSwagger) {
                 } else {
                     var operationMethodAndPath = `${methodKey.toUpperCase()} ${pathKey}`;
 
-
-
                     // Check operation properties
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'operationId', oldOperation, newOperation);
+                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'x-inin-method-name', oldOperation, newOperation);
+                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'x-purecloud-method-name', oldOperation, newOperation);
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'description', oldOperation, newOperation, 'Description was changed');
                     checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_POINT, 'summary', oldOperation, newOperation, 'Summary was changed');
-                    checkForChange(operationMethodAndPath, undefined, LOCATION_OPERATION, IMPACT_MAJOR, 'x-inin-method-name', oldOperation, newOperation);
-
                     // Check for deprecated
                     if (newOperation.deprecated === true && oldOperation.deprecated !== true) {
                         addChange(operationMethodAndPath, 'deprecated', LOCATION_OPERATION, IMPACT_MAJOR, oldOperation.deprecated, newOperation.deprecated, `Has been deprecated`);

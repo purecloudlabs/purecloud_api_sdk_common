@@ -238,7 +238,8 @@ function prebuildImpl() {
 					self.config.settings.swagger.oldSwaggerPath, 
 					self.config.settings.swagger.newSwaggerPath, 
 					self.config.settings.swagger.saveOldSwaggerPath,
-					self.config.settings.swagger.saveNewSwaggerPath);
+					self.config.settings.swagger.saveNewSwaggerPath,
+					self.config.settings.swagger.operationIdProperty);
 			})
 			.then(() => {
 				return addNotifications();
