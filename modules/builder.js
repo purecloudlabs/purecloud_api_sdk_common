@@ -394,13 +394,17 @@ function applyOverrides(original, overrides) {
 		return;
 
 	_.forOwn(overrides, function(value, key) {
-		if (typeof(value) == 'object') {
+		if (Array.isArray(value)) {
+			log.verbose(`Overriding array ${key}. Length old => new: ${original[key].length} => ${value.length}`);
+			original[key] = value;
+		}
+		else if (typeof(value) == 'object') {
 			// Initialize original to ensure the full path to the override values
 			if (!original[key])
 				original[key] = {};
 			applyOverrides(original[key], value);
 		} else {
-			log.verbose(`Overriding ${key}: ${original[key]} => ${value}`);
+			log.verbose(`Overriding ${key}. Values old => new: ${original[key]} => ${value}`);
 			original[key] = value;
 		}
 	});
