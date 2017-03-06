@@ -395,7 +395,7 @@ function applyOverrides(original, overrides) {
 
 	_.forOwn(overrides, function(value, key) {
 		if (Array.isArray(value)) {
-			log.verbose(`Overriding array ${key}. Length old => new: ${original[key].length} => ${value.length}`);
+			log.verbose(`Overriding array ${key}. Length old/new => ${original[key].length}/${value.length}`);
 			original[key] = value;
 		}
 		else if (typeof(value) == 'object') {
@@ -404,7 +404,7 @@ function applyOverrides(original, overrides) {
 				original[key] = {};
 			applyOverrides(original[key], value);
 		} else {
-			log.verbose(`Overriding ${key}. Values old => new: ${original[key]} => ${value}`);
+			log.verbose(`Overriding ${key}. Values old/new => ${original[key]}/${value}`);
 			original[key] = value;
 		}
 	});
