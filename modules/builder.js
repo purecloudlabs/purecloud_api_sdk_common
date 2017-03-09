@@ -89,9 +89,9 @@ function Builder(configPath, localConfigPath) {
 
 		// Set env vars
 		setEnv('COMMON_ROOT', path.resolve('./'));
-		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.language)));
+		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.codegenlanguage)));
 		fs.removeSync(getEnv('SDK_REPO'));
-		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.language)));
+		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.codegenlanguage)));
 		fs.emptyDirSync(getEnv('SDK_TEMP'));
 
 		// Load env vars from config
@@ -112,7 +112,7 @@ function Builder(configPath, localConfigPath) {
 
 		// Initialize instance settings
 		log.setUseColor(this.config.settings.enableLoggerColor === true);
-		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.language}/`;
+		var resourceRoot = `./resources/sdk/${this.config.settings.swaggerCodegen.resourceLanguage}/`;
 		this.resourcePaths = {
 			extensions: path.resolve(this.config.settings.resourcePaths.extensions ? 
 				this.config.settings.resourcePaths.extensions : 
@@ -238,8 +238,7 @@ function prebuildImpl() {
 					self.config.settings.swagger.oldSwaggerPath, 
 					self.config.settings.swagger.newSwaggerPath, 
 					self.config.settings.swagger.saveOldSwaggerPath,
-					self.config.settings.swagger.saveNewSwaggerPath,
-					self.config.settings.swagger.operationIdProperty);
+					self.config.settings.swagger.saveNewSwaggerPath);
 			})
 			.then(() => {
 				return addNotifications();
@@ -331,7 +330,7 @@ function buildImpl() {
 		// Swagger-codegen options
 		command += `generate `;
 		command += `-i ${newSwaggerTempFile} `;
-		command += `-l ${self.config.settings.swaggerCodegen.language} `;
+		command += `-l ${self.config.settings.swaggerCodegen.codegenlanguage} `;
 		command += `-o ${outputDir} `;
 		command += `-c ${self.config.settings.swaggerCodegen.configFile} `;
 		command += `-t ${self.resourcePaths.templates}`;
@@ -667,7 +666,7 @@ function executeScript(script) {
 function getScriptPath(script) {
 	var scriptPath = script.path;
 	if (!path.parse(scriptPath).dir)
-		scriptPath = path.join('./resources/sdk', self.config.settings.swaggerCodegen.language, 'scripts', script.path);
+		scriptPath = path.join('./resources/sdk', self.config.settings.swaggerCodegen.resourceLanguage, 'scripts', script.path);
 	scriptPath = path.resolve(scriptPath);
 
 	if (!fs.existsSync(scriptPath)) {

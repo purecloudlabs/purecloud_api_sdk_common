@@ -52,7 +52,7 @@ SwaggerDiff.prototype.newSwagger = {};
 
 /* PUBLIC FUNCTIONS */
 
-SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, saveOldSwaggerPath, saveNewSwaggerPath, operationIdProperty) {
+SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, saveOldSwaggerPath, saveNewSwaggerPath) {
     // Retrieve old swagger
     if (fs.existsSync(oldSwaggerPath)) {
         log.info(`Loading old swagger from disk: ${oldSwaggerPath}`);
@@ -78,13 +78,6 @@ SwaggerDiff.prototype.getAndDiff = function(oldSwaggerPath, newSwaggerPath, save
     }
 
     log.debug(`New swagger length: ${JSON.stringify(this.newSwagger).length}`);
-
-    // Override operation ID
-    if (operationIdProperty) {
-        log.info(`Overriding operationId with property ${operationIdProperty}`);
-        this.overwriteOperationId(this.oldSwagger, operationIdProperty);
-        this.overwriteOperationId(this.newSwagger, operationIdProperty);
-    }
 
     // Save files to disk
     if (saveOldSwaggerPath) {
@@ -232,19 +225,6 @@ SwaggerDiff.prototype.stringifyVersion = function(version, includePrerelease) {
         (includePrerelease === true && version.prerelease && version.prerelease.length > 0 ? 
             `-${version.prerelease}` : 
             '');
-};
-
-SwaggerDiff.prototype.overwriteOperationId = function(swagger, operationIdName) {
-    // Iterate paths
-    _.forEach(swagger.paths, function(path, pathKey) {
-        // Iterate operations
-        _.forEach(path, function(operation, methodKey) {
-            if (operation[operationIdName]) {
-                log.silly(`Overwriting operation ID for ${methodKey} ${pathKey}:\n  operationId=${operation.operationId}\n  ${operationIdName}=${operation[operationIdName]}`);
-                operation.operationId = operation[operationIdName];
-            }
-        });
-    });
 };
 
 
