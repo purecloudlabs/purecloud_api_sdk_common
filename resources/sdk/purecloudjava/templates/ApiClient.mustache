@@ -22,6 +22,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -37,200 +38,127 @@ import {{invokerPackage}}.auth.OAuth;
 import {{invokerPackage}}.ApiDateFormat;
 
 {{>generatedAnnotation}}
-public class ApiClient {
-    private Map<String, String> defaultHeaderMap = Collections.synchronizedMap(new HashMap<String, String>());
-    private String basePath = "{{basePath}}";
-    private int connectionTimeout = 0;
-    private boolean shouldThrowErrors = true;
+public class ApiClient implements Closeable {
+    private static final String DEFAULT_BASE_PATH = "{{basePath}}";
+    private static final String DEFAULT_USER_AGENT = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/{{artifactVersion}}/java";
+    private static final String USER_AGENT_HEADER = "User-Agent";
 
-    private CloseableHttpClient httpClient;
-    private ObjectMapper objectMapper;
+    private static Map<String, Authentication> buildAuthentications() {
+        Map<String, Authentication> authentications = new HashMap<>();{{#authMethods}}{{#isBasic}}
+        authentications.put("{{name}}", new HttpBasicAuth());{{/isBasic}}{{#isApiKey}}
+        authentications.put("{{name}}", new ApiKeyAuth({{#isKeyInHeader}}"header"{{/isKeyInHeader}}{{^isKeyInHeader}}"query"{{/isKeyInHeader}}, "{{keyParamName}}"));{{/isApiKey}}{{#isOAuth}}
+        authentications.put("{{name}}", new OAuth());{{/isOAuth}}{{/authMethods}}
 
-    private Map<String, Authentication> authentications;
+        return Collections.unmodifiableMap(authentications);
+    }
 
-    private int statusCode;
-    private Header[]responseHeaders;
+    private final Map<String, String> defaultHeaderMap;
+    private final String basePath;
+    private final Integer connectionTimeout;
+    private final Boolean shouldThrowErrors = true;
 
-    private DateFormat dateFormat;
-    private final SLF4JInterceptor loggingInterceptor;
+    private final DateFormat dateFormat;
+    private final ObjectMapper objectMapper;
+
+    private final Map<String, Authentication> authentications;
+    private final SLF4JInterceptor.DetailLevel detailLevel;
+    private final CloseableHttpClient httpClient;
 
     public ApiClient() {
-        objectMapper = new ObjectMapper();
+        this(Builder.standard());
+    }
+
+    private ApiClient(Builder builder) {
+        String basePath = builder.basePath;
+        if (basePath == null) {
+            basePath = DEFAULT_BASE_PATH;
+        }
+        this.basePath = basePath;
+
+        this.defaultHeaderMap = new HashMap<>(builder.defaultHeaderMap);
+        this.connectionTimeout = builder.connectionTimeout;
+        this.detailLevel = builder.detailLevel;
+
+        DateFormat dateFormat = builder.dateFormat;
+        if (dateFormat == null) {
+            dateFormat = buildDateFormat();
+        }
+        this.dateFormat = dateFormat;
+
+        ObjectMapper objectMapper = builder.objectMapper;
+        if (objectMapper == null) {
+            objectMapper = buildObjectMapper(dateFormat);
+        }
+        this.objectMapper = objectMapper;
+
+        this.authentications = buildAuthentications(builder);
+
+        this.httpClient = buildHttpClient(builder);
+    }
+
+    @Override
+    public void close() throws IOException {
+        httpClient.close();
+    }
+
+    private ObjectMapper buildObjectMapper(DateFormat dateFormat) {
+        ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         objectMapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
         objectMapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
         objectMapper.registerModule(new JodaModule());
-        objectMapper.setDateFormat(ApiClient.buildDefaultDateFormat());
-
-        dateFormat = ApiClient.buildDefaultDateFormat();
-        loggingInterceptor = new SLF4JInterceptor();
-
-        // Set default User-Agent.
-        setUserAgent("{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/{{artifactVersion}}/java");
-
-        // Setup authentications (key: authentication name, value: authentication).
-        authentications = new HashMap<String, Authentication>();{{#authMethods}}{{#isBasic}}
-        authentications.put("{{name}}", new HttpBasicAuth());{{/isBasic}}{{#isApiKey}}
-        authentications.put("{{name}}", new ApiKeyAuth({{#isKeyInHeader}}"header"{{/isKeyInHeader}}{{^isKeyInHeader}}"query"{{/isKeyInHeader}}, "{{keyParamName}}"));{{/isApiKey}}{{#isOAuth}}
-        authentications.put("{{name}}", new OAuth());{{/isOAuth}}{{/authMethods}}
-        // Prevent the authentications from being modified.
-        authentications = Collections.unmodifiableMap(authentications);
-
-        rebuildHttpClient();
+        objectMapper.setDateFormat(dateFormat);
+        return objectMapper;
     }
 
-    public boolean getShouldThrowErrors() {
-        return shouldThrowErrors;
-    }
-
-    public void setShouldThrowErrors(boolean shouldThrowErrors) {
-        this.shouldThrowErrors = shouldThrowErrors;
-    }
-
-    public static DateFormat buildDefaultDateFormat() {
+    private DateFormat buildDateFormat() {
         DateFormat dateFormat = new ApiDateFormat();
         // Use UTC as the default time zone.
         dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
         return dateFormat;
     }
 
-    /**
-     * Build the Client used to make HTTP requests with the latest settings,
-     * i.e. objectMapper and debugging.
-     */
-    public ApiClient rebuildHttpClient() {
-        RequestConfig.Builder requestBuilder = RequestConfig.custom()
-                .setConnectTimeout(connectionTimeout)
-                .setSocketTimeout(connectionTimeout)
-                .setConnectionRequestTimeout(connectionTimeout);
+    private Map<String, Authentication> buildAuthentications(Builder builder) {
+        Map<String, Authentication> authentications = buildAuthentications();
+        String accessToken = builder.accessToken;
+        for (Authentication authentication : authentications.values()) {
+            if (authentication instanceof OAuth && accessToken != null) {
+                ((OAuth)authentication).setAccessToken(accessToken);
+            }
+        }
+        return authentications;
+    }
 
-        this.httpClient = HttpClients.custom()
+    private CloseableHttpClient buildHttpClient(Builder builder) {
+        SLF4JInterceptor loggingInterceptor = new SLF4JInterceptor();
+        SLF4JInterceptor.DetailLevel detailLevel = builder.detailLevel;
+        if (detailLevel != null) {
+            loggingInterceptor.setDetailLevel(detailLevel);
+        }
+
+        RequestConfig.Builder requestBuilder = RequestConfig.custom();
+        Integer connectionTimeout = builder.connectionTimeout;
+        if (connectionTimeout != null && connectionTimeout > 0) {
+            requestBuilder = requestBuilder.setConnectTimeout(connectionTimeout)
+                    .setSocketTimeout(connectionTimeout)
+                    .setConnectionRequestTimeout(connectionTimeout);
+        }
+
+        return HttpClients.custom()
                 .setDefaultRequestConfig(requestBuilder.build())
                 .addInterceptorFirst((HttpRequestInterceptor) loggingInterceptor)
                 .addInterceptorFirst((HttpResponseInterceptor) loggingInterceptor)
                 .build();
-        return this;
     }
 
-    /**
-     * Returns the current object mapper used for JSON serialization/deserialization.
-     * <p>
-     * Note: If you make changes to the object mapper, remember to set it back via
-     * <code>setObjectMapper</code> in order to trigger HTTP client rebuilding.
-     * </p>
-     */
-    public ObjectMapper getObjectMapper() {
-        return objectMapper;
-    }
-
-    public ApiClient setObjectMapper(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-        // Need to rebuild the Client as it depends on object mapper.
-        rebuildHttpClient();
-        return this;
-    }
-
-    public CloseableHttpClient getHttpClient() {
-        return httpClient;
-    }
-
-    public ApiClient setHttpClient(CloseableHttpClient httpClient) {
-        this.httpClient = httpClient;
-        return this;
+    public boolean getShouldThrowErrors() {
+        return shouldThrowErrors;
     }
 
     public String getBasePath() {
         return basePath;
-    }
-
-    public ApiClient setBasePath(String basePath) {
-        this.basePath = basePath;
-        return this;
-    }
-
-    /**
-     * Gets the status code of the previous request
-     */
-    public int getStatusCode() {
-        return statusCode;
-    }
-
-    /**
-     * Gets the response headers of the previous request
-     */
-    public Header[] getResponseHeaders() {
-        return responseHeaders;
-    }
-
-    /**
-     * Get authentications (key: authentication name, value: authentication).
-     */
-    public Map<String, Authentication> getAuthentications() {
-        return authentications;
-    }
-
-    /**
-     * Get authentication for the given name.
-     *
-     * @param authName The authentication name
-     * @return The authentication, null if not found
-     */
-    public Authentication getAuthentication(String authName) {
-        return authentications.get(authName);
-    }
-
-    /**
-     * Helper method to set username for the first HTTP basic authentication.
-     */
-    public void setUsername(String username) {
-        for (Authentication auth : authentications.values()) {
-            if (auth instanceof HttpBasicAuth) {
-                ((HttpBasicAuth) auth).setUsername(username);
-                return;
-            }
-        }
-        throw new RuntimeException("No HTTP basic authentication configured!");
-    }
-
-    /**
-     * Helper method to set password for the first HTTP basic authentication.
-     */
-    public void setPassword(String password) {
-        for (Authentication auth : authentications.values()) {
-            if (auth instanceof HttpBasicAuth) {
-                ((HttpBasicAuth) auth).setPassword(password);
-                return;
-            }
-        }
-        throw new RuntimeException("No HTTP basic authentication configured!");
-    }
-
-    /**
-     * Helper method to set API key value for the first API key authentication.
-     */
-    public void setApiKey(String apiKey) {
-        for (Authentication auth : authentications.values()) {
-            if (auth instanceof ApiKeyAuth) {
-                ((ApiKeyAuth) auth).setApiKey(apiKey);
-                return;
-            }
-        }
-        throw new RuntimeException("No API key authentication configured!");
-    }
-
-    /**
-     * Helper method to set API key prefix for the first API key authentication.
-     */
-    public void setApiKeyPrefix(String apiKeyPrefix) {
-        for (Authentication auth : authentications.values()) {
-            if (auth instanceof ApiKeyAuth) {
-                ((ApiKeyAuth) auth).setApiKeyPrefix(apiKeyPrefix);
-                return;
-            }
-        }
-        throw new RuntimeException("No API key authentication configured!");
     }
 
     /**
@@ -247,40 +175,6 @@ public class ApiClient {
     }
 
     /**
-     * Set the User-Agent header's value (by adding to the default header map).
-     */
-    public ApiClient setUserAgent(String userAgent) {
-        addDefaultHeader("User-Agent", userAgent);
-        return this;
-    }
-
-    /**
-     * Add a default header.
-     *
-     * @param key The header's key
-     * @param value The header's value
-     */
-    public ApiClient addDefaultHeader(String key, String value) {
-        defaultHeaderMap.put(key, value);
-        return this;
-    }
-
-    /**
-     * @return the current logging detail level of this client
-     */
-    public SLF4JInterceptor.DetailLevel getDetailLevel() {
-        return loggingInterceptor.getDetailLevel();
-    }
-    
-    /**
-     * Sets the logging detail level of this client
-     * @param detailLevel - the level to set it to
-     */
-    public void setDetailLevel(SLF4JInterceptor.DetailLevel detailLevel) {
-        loggingInterceptor.setDetailLevel(detailLevel);
-    }
-
-    /**
      * Connect timeout (in milliseconds).
      */
     public int getConnectTimeout() {
@@ -288,41 +182,11 @@ public class ApiClient {
     }
 
     /**
-     * Set the connect timeout (in milliseconds).
-     * A value of 0 means no timeout, otherwise values must be between 1 and
-     * {@link Integer#MAX_VALUE}.
-     */
-    public ApiClient setConnectTimeout(int connectionTimeout) {
-        this.connectionTimeout = connectionTimeout;
-        rebuildHttpClient();
-        return this;
-    }
-
-    /**
-     * Get the date format used to parse/format date parameters.
-     */
-    public DateFormat getDateFormat() {
-        return dateFormat;
-    }
-
-    /**
-     * Set the date format used to parse/format date parameters.
-     */
-    public ApiClient setDateFormat(DateFormat dateFormat) {
-        this.dateFormat = dateFormat;
-        // Also set the date format for model (de)serialization with Date properties.
-        this.objectMapper.setDateFormat((DateFormat) dateFormat.clone());
-        // Need to rebuild the Client as objectMapper changes.
-        rebuildHttpClient();
-        return this;
-    }
-
-    /**
      * Parse the given string into Date object.
      */
     public Date parseDate(String str) {
         try {
-            synchronized(dateFormat) {
+            synchronized (dateFormat) {
                 return dateFormat.parse(str);
             }
         } catch (java.text.ParseException e) {
@@ -334,7 +198,7 @@ public class ApiClient {
      * Format the given Date object into string.
      */
     public String formatDate(Date date) {
-        synchronized(dateFormat) {
+        synchronized (dateFormat) {
             return dateFormat.format(date);
         }
     }
@@ -615,10 +479,7 @@ public class ApiClient {
 
             int statusCode = response.getHttpResponse().getStatusLine().getStatusCode();
             Header[] responseHeaders = response.getHttpResponse().getAllHeaders();
-            
-            this.statusCode = statusCode;
-            this.responseHeaders = responseHeaders;
-			
+
             // Parse response body
             if (statusCode >= 200 && statusCode < 300) {
                 HttpEntity entity = response.getHttpResponse().getEntity();
@@ -627,7 +488,9 @@ public class ApiClient {
                         String rawResponseBody = EntityUtils.toString(entity);
                         response.setRawResponseBody(rawResponseBody);
                         if (rawResponseBody != null && !rawResponseBody.isEmpty()) {
-                            response.setResponseObject((T) objectMapper.readValue(rawResponseBody, returnType));
+                            @SuppressWarnings("unchecked")
+                            T responseObject = (T) objectMapper.readValue(rawResponseBody, returnType);
+                            response.setResponseObject(responseObject);
                         }
                     }
                 } catch (IOException e) {
@@ -736,5 +599,91 @@ public class ApiClient {
         }
 
         return encodedFormParams;
+    }
+
+    public static class Builder {
+        public static Builder standard() {
+            return new Builder();
+        }
+
+        public static Builder from(ApiClient client) {
+            if (client == null) {
+                throw new NullPointerException();
+            }
+            Builder builder = new Builder();
+            builder.defaultHeaderMap.putAll(client.defaultHeaderMap);
+            for (Authentication authentication : client.authentications.values()) {
+                if (authentication instanceof OAuth) {
+                    builder.accessToken = ((OAuth)authentication).getAccessToken();
+                }
+            }
+            builder.dateFormat = client.dateFormat;
+            builder.objectMapper = client.objectMapper;
+            builder.basePath = client.basePath;
+            builder.connectionTimeout = client.connectionTimeout;
+            builder.shouldThrowErrors = client.shouldThrowErrors;
+            builder.detailLevel = client.detailLevel;
+            return builder;
+        }
+
+        public static ApiClient defaultClient() {
+            return standard().build();
+        }
+
+        private final Map<String, String> defaultHeaderMap = new HashMap<>();
+        private String accessToken;
+        private ObjectMapper objectMapper;
+        private DateFormat dateFormat;
+        private String basePath;
+        private Integer connectionTimeout = 0;
+        private Boolean shouldThrowErrors = true;
+        private SLF4JInterceptor.DetailLevel detailLevel;
+
+        private Builder() {
+            withUserAgent(DEFAULT_USER_AGENT);
+        }
+
+        public Builder withDefaultHeader(String header, String value) {
+            defaultHeaderMap.put(header, value);
+            return this;
+        }
+
+        public Builder withAccessToken(String accessToken) {
+            this.accessToken = accessToken;
+            return this;
+        }
+
+        public Builder withUserAgent(String userAgent) {
+            return withDefaultHeader(USER_AGENT_HEADER, userAgent);
+        }
+
+        public Builder withObjectMapper(ObjectMapper objectMapper) {
+            this.objectMapper = objectMapper;
+            return this;
+        }
+
+        public Builder withDateFormat(DateFormat dateFormat) {
+            this.dateFormat = dateFormat;
+            return this;
+        }
+
+        public Builder withBasePath(String basePath) {
+            this.basePath = basePath;
+            return this;
+        }
+
+        public Builder withConnectionTimeout(int connectionTimeout) {
+            this.connectionTimeout = connectionTimeout;
+            return this;
+        }
+
+        public Builder withShouldThrowErrors(boolean shouldThrowErrors) {
+            this.shouldThrowErrors = shouldThrowErrors;
+            return this;
+        }
+
+        public ApiClient build() {
+            return new ApiClient(this);
+        }
     }
 }
