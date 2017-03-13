@@ -23,21 +23,13 @@ import java.util.Map;
 {{>generatedAnnotation}}
 {{#operations}}
 public class {{classname}} {
-  private ApiClient {{localVariablePrefix}}apiClient;
+  private final ApiClient {{localVariablePrefix}}apiClient;
 
   public {{classname}}() {
     this(Configuration.getDefaultApiClient());
   }
 
   public {{classname}}(ApiClient apiClient) {
-    this.{{localVariablePrefix}}apiClient = apiClient;
-  }
-
-  public ApiClient getApiClient() {
-    return {{localVariablePrefix}}apiClient;
-  }
-
-  public void setApiClient(ApiClient apiClient) {
     this.{{localVariablePrefix}}apiClient = apiClient;
   }
 
