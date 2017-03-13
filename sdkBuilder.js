@@ -21,7 +21,7 @@ try {
 
 		var configPath = path.resolve(path.join('./resources/sdk', program.sdk.toLowerCase()));
 		var config = program.config ? program.config : jsonOrYaml(path.join(configPath, 'config'));
-		var localconfig = program.localconfig ? program.localconfig : sonOrYaml(path.join(configPath, 'localconfig'));
+		var localconfig = program.localconfig ? program.localconfig : jsonOrYaml(path.join(configPath, 'localconfig'));
 		console.log(`Invoking SDK build for language: ${program.sdk}`);
 		build(config, localconfig);
 		return;

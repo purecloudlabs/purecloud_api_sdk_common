@@ -69,6 +69,7 @@ function Builder(configPath, localConfigPath) {
 		maybeInit(this, 'localConfig', {});
 		maybeInit(this.config, 'settings', {});
 		maybeInit(this.config.settings, 'swagger', {});
+		maybeInit(this.config.settings, 'resourcePaths', {});
 		maybeInit(this.config, 'stageSettings', {});
 		maybeInit(this.config.stageSettings, 'prebuild', {});
 		maybeInit(this.config.stageSettings, 'build', {});
