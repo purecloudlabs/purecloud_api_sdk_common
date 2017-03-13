@@ -1,4 +1,4 @@
-package com.mypurecloud.sdk;
+package com.mypurecloud.sdk.v2;
 
 import java.util.List;
 

@@ -10,9 +10,9 @@ try {
 	var config = {
 			"artifactId": artifactId || "platform-client",
 			"artifactVersion": version.displayFull,
-			"apiPackage": "com.mypurecloud.sdk.api",
-			"modelPackage": "com.mypurecloud.sdk.model",
-			"invokerPackage": "com.mypurecloud.sdk",
+			"apiPackage": "com.mypurecloud.sdk.v2.api",
+			"modelPackage": "com.mypurecloud.sdk.v2.model",
+			"invokerPackage": "com.mypurecloud.sdk.v2",
 			"groupId": "com.mypurecloud",
 			"localVariablePrefix": "pc",
 			"serializableModel": "true",
