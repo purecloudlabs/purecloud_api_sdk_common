@@ -178,7 +178,7 @@ public class ApiClient implements Closeable {
      * Connect timeout (in milliseconds).
      */
     public int getConnectTimeout() {
-        return connectionTimeout;
+        return (connectionTimeout == null) ? 0 : connectionTimeout;
     }
 
     /**
