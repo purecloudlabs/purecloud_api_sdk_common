@@ -155,11 +155,12 @@ Builder.prototype.fullBuild = function() {
 	var deferred = Q.defer();
 
 	log.info('Full build initiated!');
+	var fullBuildStartTime = moment();
 
 	this.prebuild()
 		.then(() => this.build())
 		.then(() => this.postbuild())
-		.then(() => log.info('Full build complete'))
+		.then(() => log.info(`Full build complete in ${measureDurationFrom(fullBuildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -170,9 +171,10 @@ Builder.prototype.prebuild = function() {
 	var deferred = Q.defer();
 
 	log.writeBox('STAGE: pre-build');
+	var prebuildStartTime = moment();
 
 	prebuildImpl()
-		.then(() => log.info('Stage complete: prebuild'))
+		.then(() => log.info(`Pre-build complete in ${measureDurationFrom(prebuildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -183,9 +185,10 @@ Builder.prototype.build = function() {
 	var deferred = Q.defer();
 
 	log.writeBox('STAGE: build');
+	var buildStartTime = moment();
 
 	buildImpl()
-		.then(() => log.info('Stage complete: build'))
+		.then(() => log.info(`Build complete in ${measureDurationFrom(buildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -196,9 +199,10 @@ Builder.prototype.postbuild = function() {
 	var deferred = Q.defer();
 
 	log.writeBox('STAGE: post-build');
+	var postbuildStartTime = moment();
 
 	postbuildImpl()
-		.then(() => log.info('Stage complete: post-build'))
+		.then(() => log.info(`Post-build complete in ${measureDurationFrom(postbuildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -228,7 +232,7 @@ function prebuildImpl() {
 		log.info(`Cloning ${self.config.settings.sdkRepo.repo} (${self.config.settings.sdkRepo.branch}) to ${getEnv('SDK_REPO')}`);
 		git.clone(self.config.settings.sdkRepo.repo, self.config.settings.sdkRepo.branch, getEnv('SDK_REPO'))
 			.then(function(repository) {
-				log.debug(`Clone operation completed in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`);
+				log.debug(`Clone operation completed in ${measureDurationFrom(startTime)}`);
 				self.repository = repository;
 			})
 			.then(function() {
@@ -652,7 +656,7 @@ function executeScript(script) {
 			code = err.status;
 	}
 
-	var completedMessage = `Script completed with return code ${code} in ${moment.duration(moment().diff(startTime, new moment())).humanize()}`;
+	var completedMessage = `Script completed with return code ${code} in ${measureDurationFrom(startTime)}`;
 	if (code !== 0) {
 		log.error(completedMessage);
 		if (script.failOnError === true) {
@@ -744,4 +748,11 @@ function resolveEnvVars(config) {
 			resolveEnvVars(value);
 		}
 	});
+}
+
+function measureDurationFrom(startTime, endTime) {
+	if (!startTime) return 'no time';
+	if (!endTime) endTime = moment();
+
+	return moment.duration(endTime.diff(startTime)).humanize();
 }
