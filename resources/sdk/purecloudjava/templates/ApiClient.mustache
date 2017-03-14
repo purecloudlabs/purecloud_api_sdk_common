@@ -1,0 +1,694 @@
+package {{invokerPackage}};
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpRequestInterceptor;
+import org.apache.http.HttpResponseInterceptor;
+import org.apache.http.HttpStatus;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.*;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.Map.Entry;
+
+import {{invokerPackage}}.auth.Authentication;
+import {{invokerPackage}}.auth.HttpBasicAuth;
+import {{invokerPackage}}.auth.ApiKeyAuth;
+import {{invokerPackage}}.auth.OAuth;
+import {{invokerPackage}}.ApiDateFormat;
+
+{{>generatedAnnotation}}
+public class ApiClient implements Closeable {
+    private static final String DEFAULT_BASE_PATH = "{{basePath}}";
+    private static final String DEFAULT_USER_AGENT = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/{{artifactVersion}}/java";
+    private static final String USER_AGENT_HEADER = "User-Agent";
+
+    private static Map<String, Authentication> buildAuthentications() {
+        Map<String, Authentication> authentications = new HashMap<>();{{#authMethods}}{{#isBasic}}
+        authentications.put("{{name}}", new HttpBasicAuth());{{/isBasic}}{{#isApiKey}}
+        authentications.put("{{name}}", new ApiKeyAuth({{#isKeyInHeader}}"header"{{/isKeyInHeader}}{{^isKeyInHeader}}"query"{{/isKeyInHeader}}, "{{keyParamName}}"));{{/isApiKey}}{{#isOAuth}}
+        authentications.put("{{name}}", new OAuth());{{/isOAuth}}{{/authMethods}}
+
+        return Collections.unmodifiableMap(authentications);
+    }
+
+    private final Map<String, String> defaultHeaderMap;
+    private final String basePath;
+    private final Integer connectionTimeout;
+    private final Boolean shouldThrowErrors = true;
+
+    private final DateFormat dateFormat;
+    private final ObjectMapper objectMapper;
+
+    private final Map<String, Authentication> authentications;
+    private final SLF4JInterceptor.DetailLevel detailLevel;
+    private final CloseableHttpClient httpClient;
+
+    public ApiClient() {
+        this(Builder.standard());
+    }
+
+    private ApiClient(Builder builder) {
+        String basePath = builder.basePath;
+        if (basePath == null) {
+            basePath = DEFAULT_BASE_PATH;
+        }
+        this.basePath = basePath;
+
+        this.defaultHeaderMap = new HashMap<>(builder.defaultHeaderMap);
+        this.connectionTimeout = builder.connectionTimeout;
+        this.detailLevel = builder.detailLevel;
+
+        DateFormat dateFormat = builder.dateFormat;
+        if (dateFormat == null) {
+            dateFormat = buildDateFormat();
+        }
+        this.dateFormat = dateFormat;
+
+        ObjectMapper objectMapper = builder.objectMapper;
+        if (objectMapper == null) {
+            objectMapper = buildObjectMapper(dateFormat);
+        }
+        this.objectMapper = objectMapper;
+
+        this.authentications = buildAuthentications(builder);
+
+        this.httpClient = buildHttpClient(builder);
+    }
+
+    @Override
+    public void close() throws IOException {
+        httpClient.close();
+    }
+
+    private ObjectMapper buildObjectMapper(DateFormat dateFormat) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
+        objectMapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+        objectMapper.registerModule(new JodaModule());
+        objectMapper.setDateFormat(dateFormat);
+        return objectMapper;
+    }
+
+    private DateFormat buildDateFormat() {
+        DateFormat dateFormat = new ApiDateFormat();
+        // Use UTC as the default time zone.
+        dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return dateFormat;
+    }
+
+    private Map<String, Authentication> buildAuthentications(Builder builder) {
+        Map<String, Authentication> authentications = buildAuthentications();
+        String accessToken = builder.accessToken;
+        for (Authentication authentication : authentications.values()) {
+            if (authentication instanceof OAuth && accessToken != null) {
+                ((OAuth)authentication).setAccessToken(accessToken);
+            }
+        }
+        return authentications;
+    }
+
+    private CloseableHttpClient buildHttpClient(Builder builder) {
+        SLF4JInterceptor loggingInterceptor = new SLF4JInterceptor();
+        SLF4JInterceptor.DetailLevel detailLevel = builder.detailLevel;
+        if (detailLevel != null) {
+            loggingInterceptor.setDetailLevel(detailLevel);
+        }
+
+        RequestConfig.Builder requestBuilder = RequestConfig.custom();
+        Integer connectionTimeout = builder.connectionTimeout;
+        if (connectionTimeout != null && connectionTimeout > 0) {
+            requestBuilder = requestBuilder.setConnectTimeout(connectionTimeout)
+                    .setSocketTimeout(connectionTimeout)
+                    .setConnectionRequestTimeout(connectionTimeout);
+        }
+
+        return HttpClients.custom()
+                .setDefaultRequestConfig(requestBuilder.build())
+                .addInterceptorFirst((HttpRequestInterceptor) loggingInterceptor)
+                .addInterceptorFirst((HttpResponseInterceptor) loggingInterceptor)
+                .build();
+    }
+
+    public boolean getShouldThrowErrors() {
+        return shouldThrowErrors;
+    }
+
+    public String getBasePath() {
+        return basePath;
+    }
+
+    /**
+     * Helper method to set access token for the first OAuth2 authentication.
+     */
+    public void setAccessToken(String accessToken) {
+        for (Authentication auth : authentications.values()) {
+            if (auth instanceof OAuth) {
+                ((OAuth) auth).setAccessToken(accessToken);
+                return;
+            }
+        }
+        throw new RuntimeException("No OAuth2 authentication configured!");
+    }
+
+    /**
+     * Connect timeout (in milliseconds).
+     */
+    public int getConnectTimeout() {
+        return (connectionTimeout == null) ? 0 : connectionTimeout;
+    }
+
+    /**
+     * Parse the given string into Date object.
+     */
+    public Date parseDate(String str) {
+        try {
+            synchronized (dateFormat) {
+                return dateFormat.parse(str);
+            }
+        } catch (java.text.ParseException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Format the given Date object into string.
+     */
+    public String formatDate(Date date) {
+        synchronized (dateFormat) {
+            return dateFormat.format(date);
+        }
+    }
+
+    /**
+     * Format the given parameter object into string.
+     */
+    public String parameterToString(Object param) {
+        if (param == null) {
+            return "";
+        } else if (param instanceof Date) {
+            return formatDate((Date) param);
+        } else if (param instanceof Collection) {
+            StringBuilder b = new StringBuilder();
+            for(Object o : (Collection<?>)param) {
+                if(b.length() > 0) {
+                    b.append(",");
+                }
+                b.append(String.valueOf(o));
+            }
+            return b.toString();
+        } else {
+            return String.valueOf(param);
+        }
+    }
+
+    /*
+      Format to {@code Pair} objects.
+    */
+    public List<Pair> parameterToPairs(String collectionFormat, String name, Object value){
+        List<Pair> params = new ArrayList<Pair>();
+
+        // preconditions
+        if (name == null || name.isEmpty() || value == null) return params;
+
+        Collection<?> valueCollection = null;
+        if (value instanceof Collection<?>) {
+            valueCollection = (Collection<?>) value;
+        } else {
+            params.add(new Pair(name, parameterToString(value)));
+            return params;
+        }
+
+        if (valueCollection.isEmpty()){
+            return params;
+        }
+
+        // get the collection format
+        collectionFormat = (collectionFormat == null || collectionFormat.isEmpty() ? "csv" : collectionFormat); // default: csv
+
+        // create the params based on the collection format
+        if (collectionFormat.equals("multi")) {
+            for (Object item : valueCollection) {
+                params.add(new Pair(name, parameterToString(item)));
+            }
+
+            return params;
+        }
+
+        String delimiter = ",";
+
+        if (collectionFormat.equals("csv")) {
+            delimiter = ",";
+        } else if (collectionFormat.equals("ssv")) {
+            delimiter = " ";
+        } else if (collectionFormat.equals("tsv")) {
+            delimiter = "\t";
+        } else if (collectionFormat.equals("pipes")) {
+            delimiter = "|";
+        }
+
+        StringBuilder sb = new StringBuilder() ;
+        for (Object item : valueCollection) {
+            sb.append(delimiter);
+            sb.append(parameterToString(item));
+        }
+
+        params.add(new Pair(name, sb.substring(1)));
+
+        return params;
+    }
+
+    /**
+     * Check if the given MIME is a JSON MIME.
+     * JSON MIME examples:
+     *   application/json
+     *   application/json; charset=UTF8
+     *   APPLICATION/JSON
+     */
+    public boolean isJsonMime(String mime) {
+        return mime != null && mime.matches("(?i)application\\/json(;.*)?");
+    }
+
+    /**
+     * Select the Accept header's value from the given accepts array:
+     *   if JSON exists in the given array, use it;
+     *   otherwise use all of them (joining into a string)
+     *
+     * @param accepts The accepts array to select from
+     * @return The Accept header to use. If the given array is empty,
+     *   null will be returned (not to set the Accept header explicitly).
+     */
+    public String selectHeaderAccept(String[] accepts) {
+        if (accepts.length == 0) {
+            return null;
+        }
+        for (String accept : accepts) {
+            if (isJsonMime(accept)) {
+                return accept;
+            }
+        }
+        return StringUtil.join(accepts, ",");
+    }
+
+    /**
+     * Select the Content-Type header's value from the given array:
+     *   if JSON exists in the given array, use it;
+     *   otherwise use the first one of the array.
+     *
+     * @param contentTypes The Content-Type array to select from
+     * @return The Content-Type header to use. If the given array is empty,
+     *   JSON will be used.
+     */
+    public String selectHeaderContentType(String[] contentTypes) {
+        if (contentTypes.length == 0) {
+            return "application/json";
+        }
+        for (String contentType : contentTypes) {
+            if (isJsonMime(contentType)) {
+                return contentType;
+            }
+        }
+        return contentTypes[0];
+    }
+
+    /**
+     * Escape the given string to be used as URL query value.
+     */
+    public String escapeString(String str) {
+        try {
+            return URLEncoder.encode(str, "utf8").replaceAll("\\+", "%20");
+        } catch (UnsupportedEncodingException e) {
+            return str;
+        }
+    }
+
+    /**
+     * Serialize the given Java object into string according the given
+     * Content-Type (only JSON is supported for now).
+     */
+    public String serialize(Object obj) throws ApiException {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            throw new ApiException(e);
+        }
+    }
+
+    /**
+     * Build full URL by concatenating base path, the given sub path and query parameters.
+     *
+     * @param path The sub path
+     * @param queryParams The query parameters
+     * @return The full URL
+     */
+    private String buildUrl(String path, List<Pair> queryParams) {
+        final StringBuilder url = new StringBuilder();
+        url.append(basePath).append(path);
+
+        if (queryParams != null && !queryParams.isEmpty()) {
+            // support (constant) query string in `path`, e.g. "/posts?draft=1"
+            String prefix = path.contains("?") ? "&" : "?";
+            for (Pair param : queryParams) {
+                if (param.getValue() != null) {
+                    if (prefix != null) {
+                        url.append(prefix);
+                        prefix = null;
+                    } else {
+                        url.append("&");
+                    }
+                    String value = parameterToString(param.getValue());
+                    url.append(escapeString(param.getName())).append("=").append(escapeString(value));
+                }
+            }
+        }
+
+        return url.toString();
+    }
+
+    private <T> ApiResponse<T> getAPIResponse(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames) throws ApiException, IOException {
+        if (body != null && !formParams.isEmpty()) {
+            throw new ApiException(500, "Cannot have body and form params");
+        }
+
+        updateParamsForAuth(authNames, queryParams, headerParams);
+        final String url = buildUrl(path, queryParams);
+
+        // Build request object
+        HttpUriRequest request;
+        if ("GET".equals(method)) {
+            HttpGet req = new HttpGet(url);
+            request = req;
+        } else if ("POST".equals(method)) {
+            HttpPost req = new HttpPost(url);
+            if (contentType.startsWith("application/x-www-form-urlencoded")) {
+                List<NameValuePair> nvps = new ArrayList<>();
+                for (Entry<String, Object> param : formParams.entrySet()) {
+                    nvps.add(new BasicNameValuePair(param.getKey(), parameterToString(param.getValue())));
+                }
+                req.setEntity(new UrlEncodedFormEntity(nvps));
+            } else {
+                req.setEntity(new StringEntity(serialize(body), "UTF-8"));
+            }
+            request = req;
+        } else if ("PUT".equals(method)) {
+            HttpPut req = new HttpPut(url);
+            req.setEntity(new StringEntity(serialize(body)));
+            request = req;
+        } else if ("DELETE".equals(method)) {
+            HttpDelete req = new HttpDelete(url);
+            request = req;
+        } else if ("PATCH".equals(method)) {
+            HttpPatch req = new HttpPatch(url);
+            req.setEntity(new StringEntity(serialize(body)));
+            request = req;
+        } else {
+            throw new ApiException(500, "unknown method type " + method);
+        }
+
+        // Add headers
+        if (accept != null && !accept.isEmpty()) {
+            request.setHeader("Accept", accept);
+        }
+        if (contentType != null && !contentType.isEmpty()) {
+            request.setHeader("Content-Type", contentType);
+        }
+        for (String key : headerParams.keySet()) {
+            request.setHeader(key, headerParams.get(key));
+        }
+        for (String key : defaultHeaderMap.keySet()) {
+            if (!headerParams.containsKey(key)) {
+                request.setHeader(key, defaultHeaderMap.get(key));
+            }
+        }
+
+
+        CloseableHttpResponse response = null;
+        ApiResponse<T> apiResponse = new ApiResponse<>(request, null);
+
+        response = httpClient.execute(request);
+        apiResponse.setHttpResponse(response);
+
+        return apiResponse;
+    }
+
+    /**
+     * Invoke API by sending HTTP request with the given options.
+     *
+     * @param path         The sub-path of the HTTP URL
+     * @param method       The request method, one of "GET", "POST", "PUT", and "DELETE"
+     * @param queryParams  The query parameters
+     * @param body         The request body object - if it is not binary, otherwise null
+     * @param headerParams The header parameters
+     * @param formParams   The form parameters
+     * @param accept       The request's Accept header
+     * @param contentType  The request's Content-Type header
+     * @param authNames    The authentications to apply
+     * @return The response body in type of string
+     */
+    public <T> ApiResponse<T> invokeAPIVerbose(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
+        ApiResponse<T> response = null;
+        try {
+            try {
+                response = getAPIResponse(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames);
+            } catch (IOException e) {
+                throw new ApiException(e);
+            }
+
+            int statusCode = response.getHttpResponse().getStatusLine().getStatusCode();
+            Header[] responseHeaders = response.getHttpResponse().getAllHeaders();
+
+            // Parse response body
+            if (statusCode >= 200 && statusCode < 300) {
+                HttpEntity entity = response.getHttpResponse().getEntity();
+                try {
+                    if (statusCode != 204 && entity != null && returnType != null) {
+                        String rawResponseBody = EntityUtils.toString(entity);
+                        response.setRawResponseBody(rawResponseBody);
+                        if (rawResponseBody != null && !rawResponseBody.isEmpty()) {
+                            @SuppressWarnings("unchecked")
+                            T responseObject = (T) objectMapper.readValue(rawResponseBody, returnType);
+                            response.setResponseObject(responseObject);
+                        }
+                    }
+                } catch (IOException e) {
+                    throw new ApiException(e);
+                }
+            } else if (statusCode == HttpStatus.SC_NO_CONTENT) {
+                // No body, it's cool.
+            } else {
+                String message = "error";
+                String respBody = null;
+                HttpEntity entity = response.getHttpResponse().getEntity();
+                if (entity != null) {
+                    try {
+                        respBody = EntityUtils.toString(entity);
+                        message = respBody;
+                    } catch (RuntimeException | IOException e) {
+                        // e.printStackTrace();
+                    }
+                }
+                throw new ApiException(statusCode,
+                        message,
+                        response.getResponseHeaders(),
+                        respBody);
+            }
+
+            return response;
+        } catch (ApiException e) {
+            if (shouldThrowErrors)
+                throw e;
+            else if (response == null)
+                response = new ApiResponse<>(null, null);
+            response.setException(e);
+            return response;
+        } finally {
+            try {
+                if (response != null && response.getHttpResponse() != null) {
+                    response.getHttpResponse().close();
+                }
+            } catch (IOException e) {
+                //e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Invoke API by sending HTTP request with the given options.
+     *
+     * @param path         The sub-path of the HTTP URL
+     * @param method       The request method, one of "GET", "POST", "PUT", and "DELETE"
+     * @param queryParams  The query parameters
+     * @param body         The request body object - if it is not binary, otherwise null
+     * @param headerParams The header parameters
+     * @param formParams   The form parameters
+     * @param accept       The request's Accept header
+     * @param contentType  The request's Content-Type header
+     * @param authNames    The authentications to apply
+     * @return The response body in type of string
+     */
+    public <T> T invokeAPI(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
+        T response = null;
+        try {
+            response = invokeAPIVerbose(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames, returnType).getResponseObject();
+            return response;
+        } catch (ApiException e) {
+            if (shouldThrowErrors)
+                throw e;
+            else
+                return response;
+        }
+    }
+
+    /**
+     * Update query and header parameters based on authentication settings.
+     *
+     * @param authNames The authentications to apply
+     */
+    private void updateParamsForAuth(String[] authNames, List<Pair> queryParams, Map<String, String> headerParams) {
+        for (String authName : authNames) {
+            Authentication auth = authentications.get(authName);
+            if (auth == null) throw new RuntimeException("Authentication undefined: " + authName);
+            auth.applyToParams(queryParams, headerParams);
+        }
+    }
+
+    /**
+     * Encode the given form parameters as request body.
+     */
+    private String getXWWWFormUrlencodedParams(Map<String, Object> formParams) {
+        StringBuilder formParamBuilder = new StringBuilder();
+
+        for (Entry<String, Object> param : formParams.entrySet()) {
+            String valueStr = parameterToString(param.getValue());
+            try {
+                formParamBuilder.append(URLEncoder.encode(param.getKey(), "utf8"))
+                        .append("=")
+                        .append(URLEncoder.encode(valueStr, "utf8"));
+                formParamBuilder.append("&");
+            } catch (UnsupportedEncodingException e) {
+                // move on to next
+            }
+        }
+
+        String encodedFormParams = formParamBuilder.toString();
+        if (encodedFormParams.endsWith("&")) {
+            encodedFormParams = encodedFormParams.substring(0, encodedFormParams.length() - 1);
+        }
+
+        return encodedFormParams;
+    }
+
+    public static class Builder {
+        public static Builder standard() {
+            return new Builder();
+        }
+
+        public static Builder from(ApiClient client) {
+            if (client == null) {
+                throw new NullPointerException();
+            }
+            Builder builder = new Builder();
+            builder.defaultHeaderMap.putAll(client.defaultHeaderMap);
+            for (Authentication authentication : client.authentications.values()) {
+                if (authentication instanceof OAuth) {
+                    builder.accessToken = ((OAuth)authentication).getAccessToken();
+                }
+            }
+            builder.dateFormat = client.dateFormat;
+            builder.objectMapper = client.objectMapper;
+            builder.basePath = client.basePath;
+            builder.connectionTimeout = client.connectionTimeout;
+            builder.shouldThrowErrors = client.shouldThrowErrors;
+            builder.detailLevel = client.detailLevel;
+            return builder;
+        }
+
+        public static ApiClient defaultClient() {
+            return standard().build();
+        }
+
+        private final Map<String, String> defaultHeaderMap = new HashMap<>();
+        private String accessToken;
+        private ObjectMapper objectMapper;
+        private DateFormat dateFormat;
+        private String basePath;
+        private Integer connectionTimeout = 0;
+        private Boolean shouldThrowErrors = true;
+        private SLF4JInterceptor.DetailLevel detailLevel;
+
+        private Builder() {
+            withUserAgent(DEFAULT_USER_AGENT);
+        }
+
+        public Builder withDefaultHeader(String header, String value) {
+            defaultHeaderMap.put(header, value);
+            return this;
+        }
+
+        public Builder withAccessToken(String accessToken) {
+            this.accessToken = accessToken;
+            return this;
+        }
+
+        public Builder withUserAgent(String userAgent) {
+            return withDefaultHeader(USER_AGENT_HEADER, userAgent);
+        }
+
+        public Builder withObjectMapper(ObjectMapper objectMapper) {
+            this.objectMapper = objectMapper;
+            return this;
+        }
+
+        public Builder withDateFormat(DateFormat dateFormat) {
+            this.dateFormat = dateFormat;
+            return this;
+        }
+
+        public Builder withBasePath(String basePath) {
+            this.basePath = basePath;
+            return this;
+        }
+
+        public Builder withConnectionTimeout(int connectionTimeout) {
+            this.connectionTimeout = connectionTimeout;
+            return this;
+        }
+
+        public Builder withShouldThrowErrors(boolean shouldThrowErrors) {
+            this.shouldThrowErrors = shouldThrowErrors;
+            return this;
+        }
+
+        public Builder withDetailLevel(SLF4JInterceptor.DetailLevel detailLevel) {
+            this.detailLevel = detailLevel;
+            return this;
+        }
+
+        public ApiClient build() {
+            return new ApiClient(this);
+        }
+    }
+}
