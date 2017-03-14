@@ -682,6 +682,11 @@ public class ApiClient implements Closeable {
             return this;
         }
 
+        public Builder withDetailLevel(SLF4JInterceptor.DetailLevel detailLevel) {
+            this.detailLevel = detailLevel;
+            return this;
+        }
+
         public ApiClient build() {
             return new ApiClient(this);
         }
