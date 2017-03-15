@@ -18,6 +18,8 @@ const zip = require('./zip');
 
 /* PRIVATE VARS */
 
+const TIMESTAMP_FORMAT = "h:mm:ss a";
+
 var newSwaggerTempFile = '';
 
 
@@ -160,7 +162,7 @@ Builder.prototype.fullBuild = function() {
 	this.prebuild()
 		.then(() => this.build())
 		.then(() => this.postbuild())
-		.then(() => log.info(`Full build complete in ${measureDurationFrom(fullBuildStartTime)}`))
+		.then(() => log.info(`Full build complete at ${moment().format(TIMESTAMP_FORMAT)} in ${measureDurationFrom(fullBuildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -174,7 +176,7 @@ Builder.prototype.prebuild = function() {
 	var prebuildStartTime = moment();
 
 	prebuildImpl()
-		.then(() => log.info(`Pre-build complete in ${measureDurationFrom(prebuildStartTime)}`))
+		.then(() => log.info(`Pre-build complete at ${moment().format(TIMESTAMP_FORMAT)} in ${measureDurationFrom(prebuildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -188,7 +190,7 @@ Builder.prototype.build = function() {
 	var buildStartTime = moment();
 
 	buildImpl()
-		.then(() => log.info(`Build complete in ${measureDurationFrom(buildStartTime)}`))
+		.then(() => log.info(`Build complete at ${moment().format(TIMESTAMP_FORMAT)} in ${measureDurationFrom(buildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
@@ -202,7 +204,7 @@ Builder.prototype.postbuild = function() {
 	var postbuildStartTime = moment();
 
 	postbuildImpl()
-		.then(() => log.info(`Post-build complete in ${measureDurationFrom(postbuildStartTime)}`))
+		.then(() => log.info(`Post-build complete at ${moment().format(TIMESTAMP_FORMAT)} in ${measureDurationFrom(postbuildStartTime)}`))
 		.then(() => deferred.resolve())
 		.catch((err) => deferred.reject(err));
 
