@@ -2,7 +2,7 @@ package com.mypurecloud.sdk.v2;
 
 import java.util.List;
 
-public interface IPagedResource<T> {
+public interface PagedResource<T> {
     Integer getPageSize();
     void setPageSize(Integer pageSize);
 
