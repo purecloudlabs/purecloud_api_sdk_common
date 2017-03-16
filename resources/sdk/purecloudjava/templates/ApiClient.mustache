@@ -78,6 +78,7 @@ public class ApiClient implements Closeable {
         this.defaultHeaderMap = new HashMap<>(builder.defaultHeaderMap);
         this.connectionTimeout = builder.connectionTimeout;
         this.detailLevel = builder.detailLevel;
+        this.shouldThrowErrors = builder.shouldThrowErrors;
 
         DateFormat dateFormat = builder.dateFormat;
         if (dateFormat == null) {
