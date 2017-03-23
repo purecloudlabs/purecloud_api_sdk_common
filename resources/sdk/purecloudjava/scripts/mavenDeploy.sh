@@ -51,4 +51,6 @@ mvn $MAVEN_SETTINGS_FILE jar:jar gpg:sign-and-deploy-file \
 -DrepositoryId=$MAVEN_REPO_ID \
 -Dfile=target/$ARTIFACT_NAME-$VERSION.jar \
 -DpomFile=pom.xml \
--Djavadoc=target/$ARTIFACT_NAME-$VERSION-javadoc.jar $DPGP_PASSPHRASE
+-Djavadoc=target/$ARTIFACT_NAME-$VERSION-javadoc.jar \
+-Dsources=target/$ARTIFACT_NAME-$VERSION-sources.jar \
+$DPGP_PASSPHRASE

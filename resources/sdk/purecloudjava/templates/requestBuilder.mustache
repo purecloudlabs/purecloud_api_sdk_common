@@ -87,6 +87,12 @@ public class {{classname}} {
 		}
 		{{/allParams}}
 
+		public Builder withRequiredParams({{#requiredParams}}{{^-first}}, {{/-first}}{{{dataType}}} {{paramName}}{{/requiredParams}}) {
+{{#requiredParams}}			request.set{{paramName}}({{paramName}});
+			{{/requiredParams}}
+			return this;
+		}
+
 		public {{classname}} build() {
 			return request;
 		}
