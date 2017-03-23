@@ -1,14 +1,12 @@
 package {{invokerPackage}};
 
-import org.apache.http.Header;
-
 import java.util.Map;
 import java.util.List;
 
 {{>generatedAnnotation}}
 public class ApiException extends Exception {
   private int code = 0;
-  private Header[] responseHeaders = null;
+  private Map<String, String> responseHeaders = null;
   private String responseBody = null;
 
   public ApiException() {}
@@ -21,22 +19,22 @@ public class ApiException extends Exception {
     super(message);
   }
 
-  public ApiException(String message, Throwable throwable, int code, Header[] responseHeaders, String responseBody) {
+  public ApiException(String message, Throwable throwable, int code, Map<String, String> responseHeaders, String responseBody) {
     super(message, throwable);
     this.code = code;
     this.responseHeaders = responseHeaders;
     this.responseBody = responseBody;
   }
 
-  public ApiException(String message, int code, Header[] responseHeaders, String responseBody) {
+  public ApiException(String message, int code, Map<String, String> responseHeaders, String responseBody) {
     this(message, (Throwable) null, code, responseHeaders, responseBody);
   }
 
-  public ApiException(String message, Throwable throwable, int code, Header[] responseHeaders) {
+  public ApiException(String message, Throwable throwable, int code, Map<String, String> responseHeaders) {
     this(message, throwable, code, responseHeaders, null);
   }
 
-  public ApiException(int code, Header[] responseHeaders, String responseBody) {
+  public ApiException(int code, Map<String, String> responseHeaders, String responseBody) {
     this((String) null, (Throwable) null, code, responseHeaders, responseBody);
   }
 
@@ -45,7 +43,7 @@ public class ApiException extends Exception {
     this.code = code;
   }
 
-  public ApiException(int code, String message, Header[] responseHeaders, String responseBody) {
+  public ApiException(int code, String message, Map<String, String> responseHeaders, String responseBody) {
     this(code, message);
     this.responseHeaders = responseHeaders;
     this.responseBody = responseBody;
@@ -58,7 +56,7 @@ public class ApiException extends Exception {
   /**
    * Get the HTTP response headers.
    */
-  public Header[] getResponseHeaders() {
+  public Map<String, String> getResponseHeaders() {
     return responseHeaders;
   }
 

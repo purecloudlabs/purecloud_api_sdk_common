@@ -22,7 +22,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -36,9 +35,11 @@ import {{invokerPackage}}.auth.HttpBasicAuth;
 import {{invokerPackage}}.auth.ApiKeyAuth;
 import {{invokerPackage}}.auth.OAuth;
 import {{invokerPackage}}.ApiDateFormat;
+import {{invokerPackage}}.connector.ApiClientConnector;
+import {{invokerPackage}}.connector.apache.ApacheHttpClientConnector;
 
 {{>generatedAnnotation}}
-public class ApiClient implements Closeable {
+public class ApiClient implements AutoCloseable {
     private static final String DEFAULT_BASE_PATH = "{{basePath}}";
     private static final String DEFAULT_USER_AGENT = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/{{artifactVersion}}/java";
     private static final String USER_AGENT_HEADER = "User-Agent";
@@ -61,8 +62,8 @@ public class ApiClient implements Closeable {
     private final ObjectMapper objectMapper;
 
     private final Map<String, Authentication> authentications;
-    private final SLF4JInterceptor.DetailLevel detailLevel;
-    private final CloseableHttpClient httpClient;
+    private final SLF4JInterceptor.DetailLevel detailLevel; //TODO refactor out
+    private final ApiClientConnector connector;
 
     public ApiClient() {
         this(Builder.standard());
@@ -93,12 +94,12 @@ public class ApiClient implements Closeable {
 
         this.authentications = buildAuthentications(builder);
 
-        this.httpClient = buildHttpClient(builder);
+        this.connector = buildHttpConnector(builder);
     }
 
     @Override
-    public void close() throws IOException {
-        httpClient.close();
+    public void close() throws Exception {
+        connector.close();
     }
 
     private ObjectMapper buildObjectMapper(DateFormat dateFormat) {
@@ -151,6 +152,11 @@ public class ApiClient implements Closeable {
                 .addInterceptorFirst((HttpRequestInterceptor) loggingInterceptor)
                 .addInterceptorFirst((HttpResponseInterceptor) loggingInterceptor)
                 .build();
+    }
+
+    private ApiClientConnector buildHttpConnector(Builder builder) {
+        CloseableHttpClient client = buildHttpClient(builder);
+        return new ApacheHttpClientConnector(client);
     }
 
     public boolean getShouldThrowErrors() {
@@ -388,70 +394,163 @@ public class ApiClient implements Closeable {
         return url.toString();
     }
 
-    private <T> ApiResponse<T> getAPIResponse(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames) throws ApiException, IOException {
+    private ApiRequest<String> prepareConnectorRequest(ApiRequest<?> request) throws Exception {
+        final String path = request.getPath();
+        final List<Pair> queryParams = new ArrayList<>(request.getQueryParams());
+        final Map<String, Object> formParams = new HashMap<>(request.getFormParams());
+        final Map<String, String> headers = new HashMap<>(request.getHeaders());
+        final Object body = request.getBody();
         if (body != null && !formParams.isEmpty()) {
             throw new ApiException(500, "Cannot have body and form params");
         }
 
-        updateParamsForAuth(authNames, queryParams, headerParams);
+        updateParamsForAuth(request.getAuthNames(), queryParams, headers);
         final String url = buildUrl(path, queryParams);
 
-        // Build request object
-        HttpUriRequest request;
-        if ("GET".equals(method)) {
-            HttpGet req = new HttpGet(url);
-            request = req;
-        } else if ("POST".equals(method)) {
-            HttpPost req = new HttpPost(url);
-            if (contentType.startsWith("application/x-www-form-urlencoded")) {
-                List<NameValuePair> nvps = new ArrayList<>();
-                for (Entry<String, Object> param : formParams.entrySet()) {
-                    nvps.add(new BasicNameValuePair(param.getKey(), parameterToString(param.getValue())));
-                }
-                req.setEntity(new UrlEncodedFormEntity(nvps));
-            } else {
-                req.setEntity(new StringEntity(serialize(body), "UTF-8"));
-            }
-            request = req;
-        } else if ("PUT".equals(method)) {
-            HttpPut req = new HttpPut(url);
-            req.setEntity(new StringEntity(serialize(body)));
-            request = req;
-        } else if ("DELETE".equals(method)) {
-            HttpDelete req = new HttpDelete(url);
-            request = req;
-        } else if ("PATCH".equals(method)) {
-            HttpPatch req = new HttpPatch(url);
-            req.setEntity(new StringEntity(serialize(body)));
-            request = req;
-        } else {
-            throw new ApiException(500, "unknown method type " + method);
-        }
-
-        // Add headers
-        if (accept != null && !accept.isEmpty()) {
-            request.setHeader("Accept", accept);
-        }
-        if (contentType != null && !contentType.isEmpty()) {
-            request.setHeader("Content-Type", contentType);
-        }
-        for (String key : headerParams.keySet()) {
-            request.setHeader(key, headerParams.get(key));
-        }
         for (String key : defaultHeaderMap.keySet()) {
-            if (!headerParams.containsKey(key)) {
-                request.setHeader(key, defaultHeaderMap.get(key));
-            }
+            headers.putIfAbsent(key, defaultHeaderMap.get(key));
         }
 
+        final String serializedBody = (body != null) ? serialize(body) : null;
 
-        CloseableHttpResponse response = null;
-        ApiResponse<T> apiResponse = new ApiResponse<>(request, null);
+        return new ApiRequest<String>() {
+            @Override
+            public String getPath() {
+                return url;
+            }
 
-        response = httpClient.execute(request);
-        apiResponse.setHttpResponse(response);
+            @Override
+            public String getMethod() {
+                return request.getMethod();
+            }
 
-        return apiResponse;
+            @Override
+            public Map<String, String> getPathParams() {
+                return request.getPathParams();
+            }
+
+            @Override
+            public List<Pair> getQueryParams() {
+                return request.getQueryParams();
+            }
+
+            @Override
+            public Map<String, Object> getFormParams() {
+                return request.getFormParams();
+            }
+
+            @Override
+            public Map<String, String> getHeaderParams() {
+                return request.getHeaderParams();
+            }
+
+            @Override
+            public Map<String, String> getHeaders() {
+                return request.getHeaders();
+            }
+
+            @Override
+            public String getContentType() {
+                return request.getContentType();
+            }
+
+            @Override
+            public String getAccepts() {
+                return request.getAccepts();
+            }
+
+            @Override
+            public String getBody() {
+                return serializedBody;
+            }
+
+            @Override
+            public String[] getAuthNames() {
+                return request.getAuthNames();
+            }
+        };
+    }
+
+    private <T> ApiResponse<T> interpretConnectorResponse(ApiResponse<String> response, TypeReference<T> returnType) throws Exception {
+        Exception exception = response.getException();
+        if (exception != null) {
+            throw exception;
+        }
+
+        int statusCode = response.getStatusCode();
+        Map<String, String> headers = response.getHeaders();
+
+        if (statusCode >= 200 && statusCode < 300) {
+            String body = response.getBody();
+            final T entity;
+            if (statusCode != 204 && body != null && returnType != null) {
+                if (returnType.getType() != Void.class) {
+                    entity = objectMapper.readValue(body, returnType);
+                }
+                else {
+                    entity = null;
+                }
+            }
+            else {
+                entity = null;
+            }
+            return new ApiResponse<T>() {
+                @Override
+                public Exception getException() {
+                    return null;
+                }
+
+                @Override
+                public Integer getStatusCode() {
+                    return statusCode;
+                }
+
+                @Override
+                public boolean hasRawBody() {
+                    return (body != null);
+                }
+
+                @Override
+                public String getRawBody() {
+                    return body;
+                }
+
+                @Override
+                public T getBody() {
+                    return entity;
+                }
+
+                @Override
+                public Map<String, String> getHeaders() {
+                    return headers;
+                }
+
+                @Override
+                public String getHeader(String key) {
+                    return headers.get(key);
+                }
+
+                @Override
+                public String getCorrelationId() {
+                    return getHeader("ININ-Correlation-ID");
+                }
+
+                @Override
+                public void close() throws Exception { }
+            };
+        }
+        else {
+            String message = "error";
+            String body = response.getBody();
+            throw new ApiException(statusCode, message, headers, body);
+        }
+    }
+
+    private <T> ApiResponse<T> getAPIResponse(ApiRequest<?> request, TypeReference<T> returnType) throws Exception {
+        ApiRequest<String> connectorRequest = prepareConnectorRequest(request);
+        try (ApiResponse<String> connectorResponse = connector.invoke(connectorRequest)) {
+            return interpretConnectorResponse(connectorResponse, returnType);
+        }
     }
 
     /**
@@ -469,6 +568,64 @@ public class ApiClient implements Closeable {
      * @return The response body in type of string
      */
     public <T> ApiResponse<T> invokeAPIVerbose(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
+        return invokeAPIVerbose(new ApiRequest<Object>() {
+            @Override
+            public String getPath() {
+                return path;
+            }
+
+            @Override
+            public String getMethod() {
+                return method;
+            }
+
+            @Override
+            public Map<String, String> getPathParams() {
+                return Collections.emptyMap();
+            }
+
+            @Override
+            public List<Pair> getQueryParams() {
+                return queryParams;
+            }
+
+            @Override
+            public Map<String, Object> getFormParams() {
+                return formParams;
+            }
+
+            @Override
+            public Map<String, String> getHeaderParams() {
+                return headerParams;
+            }
+
+            @Override
+            public Map<String, String> getHeaders() {
+                return headerParams;
+            }
+
+            @Override
+            public String getContentType() {
+                return contentType;
+            }
+
+            @Override
+            public String getAccepts() {
+                return accept;
+            }
+
+            @Override
+            public Object getBody() {
+                return body;
+            }
+
+            @Override
+            public String[] getAuthNames() {
+                return authNames;
+            }
+        }, returnType);
+
+        /*
         ApiResponse<T> response = null;
         try {
             try {
@@ -477,8 +634,8 @@ public class ApiClient implements Closeable {
                 throw new ApiException(e);
             }
 
-            int statusCode = response.getHttpResponse().getStatusLine().getStatusCode();
-            Header[] responseHeaders = response.getHttpResponse().getAllHeaders();
+            int statusCode = response.getStatusCode();
+            Map<String, List<String>> responseHeaders = response.getHeaders();
 
             // Parse response body
             if (statusCode >= 200 && statusCode < 300) {
@@ -533,6 +690,66 @@ public class ApiClient implements Closeable {
                 //e.printStackTrace();
             }
         }
+        */
+    }
+
+    public <T> ApiResponse<T> invokeAPIVerbose(ApiRequest<?> request, TypeReference<T> returnType) throws ApiException {
+        try {
+            ApiResponse<T> response = getAPIResponse(request, returnType);
+            return response;
+        }
+        catch (Exception exception) {
+            if (shouldThrowErrors) {
+                if (exception instanceof ApiException) {
+                    throw (ApiException)exception;
+                }
+                throw new ApiException(exception);
+            }
+            return new ApiResponse<T>() {
+                @Override
+                public Exception getException() {
+                    return exception;
+                }
+
+                @Override
+                public Integer getStatusCode() {
+                    return null;
+                }
+
+                @Override
+                public boolean hasRawBody() {
+                    return false;
+                }
+
+                @Override
+                public String getRawBody() {
+                    return null;
+                }
+
+                @Override
+                public T getBody() {
+                    return null;
+                }
+
+                @Override
+                public Map<String, String> getHeaders() {
+                    return null;
+                }
+
+                @Override
+                public String getHeader(String key) {
+                    return null;
+                }
+
+                @Override
+                public String getCorrelationId() {
+                    return null;
+                }
+
+                @Override
+                public void close() throws Exception { }
+            };
+        }
     }
 
     /**
@@ -552,7 +769,26 @@ public class ApiClient implements Closeable {
     public <T> T invokeAPI(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
         T response = null;
         try {
-            response = invokeAPIVerbose(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames, returnType).getResponseObject();
+            response = invokeAPIVerbose(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames, returnType).getBody();
+            return response;
+        } catch (ApiException e) {
+            if (shouldThrowErrors)
+                throw e;
+            else
+                return response;
+        }
+    }
+
+    /**
+     * Invoke API by sending HTTP request with the given options.
+     *
+     * @param request The request object
+     * @return The response body in type of string
+     */
+    public <T> T invokeAPI(ApiRequest<?> request, TypeReference<T> returnType) throws ApiException {
+        T response = null;
+        try {
+            response = invokeAPIVerbose(request, returnType).getBody();
             return response;
         } catch (ApiException e) {
             if (shouldThrowErrors)

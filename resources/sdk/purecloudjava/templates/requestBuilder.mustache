@@ -7,74 +7,66 @@ import {{invokerPackage}}.ApiResponse;
 import {{invokerPackage}}.Configuration;
 import {{modelPackage}}.*;
 import {{invokerPackage}}.Pair;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 {{#imports}}import {{import}};
 {{/imports}}
 
 {{#operation}}
-public class {{classname}} implements ApiRequest {
+public class {{classname}} {
+    private static final String HTTP_METHOD = "{{httpMethod}}";
+    private static final String PATH_TEMPLATE = "{{path}}";
+    private static final String[] CONTENT_TYPES = new String[] { {{#consumes}}"{{mediaType}}"{{#hasMore}}, {{/hasMore}}{{/consumes}} };
+    private static final String[] ACCEPTS = new String[] { {{#produces}}"{{mediaType}}"{{#hasMore}}, {{/hasMore}}{{/produces}} };
+    private static final String ACCEPTS_JOINED = "{{#produces}}{{mediaType}}{{#hasMore}},{{/hasMore}}{{/produces}}";
+    private static final Pattern JSON_MIME_PATTERN = Pattern.compile("(?i)application\\/json(;.*)?");
+    private static final String[] AUTH_NAMES = new String[] { };
+
 	{{#allParams}}
 	private {{{dataType}}} {{paramName}};
-	public {{{dataType}}} get{{paramName}}() {
+	public {{{dataType}}} get{{paramTitle}}() {
 		return this.{{paramName}};
 	}
-	public void set{{paramName}}({{{dataType}}} {{paramName}}) {
+
+	public void set{{paramTitle}}({{{dataType}}} {{paramName}}) {
 		this.{{paramName}} = {{paramName}};
 	}
 
+	public {{classname}} with{{paramTitle}}({{{dataType}}} {{paramName}}) {
+	    this.set{{paramTitle}}({{paramName}});
+	    return this;
+	}
+
 	{{/allParams}}
-
-	private Map<String, String> customHeaders = new HashMap<>();
-
+	private final Map<String, String> customHeaders = new HashMap<>();
     public Map<String, String> getCustomHeaders() {
-        return customHeaders;
+        return this.customHeaders;
     }
 
     public void setCustomHeaders(Map<String, String> customHeaders) {
-        this.customHeaders = customHeaders;
+        this.customHeaders.clear();
+        this.customHeaders.putAll(customHeaders);
     }
 
-    @Override
-    public Object getBody() {
-		return {{#bodyParam}}this.{{paramName}}{{/bodyParam}}{{^bodyParam}}null{{/bodyParam}};
+    public void addCustomHeader(String name, String value) {
+        this.customHeaders.put(name, value);
     }
 
-    @Override
-    public List<Pair> getQueryParams() {
-		List<Pair> params = new ArrayList<>();
-{{#queryParams}}		params.add(new Pair("{{paramName}}", this.{{paramName}} == null ? "" : this.{{paramName}}.toString()));
-		{{/queryParams}}
-		return params;
+    public {{classname}} withCustomHeader(String name, String value) {
+        this.addCustomHeader(name, value);
+        return this;
     }
 
-    @Override
-    public List<Pair> getPathParams() {
-		List<Pair> params = new ArrayList<>();
-{{#pathParams}}		params.add(new Pair("{{paramName}}", this.{{paramName}} == null ? "" : this.{{paramName}}.toString()));
-		{{/pathParams}}
-		return params;
-    }
-
-    @Override
-    public Map<String, Object> getFormParams() {
-        Map<String, Object> params = new HashMap<>();
-{{#formParams}}		params.put("{{paramName}}", this.{{paramName}});
-		{{/formParams}}
-		return params;
-    }
-
-    @Override
-    public Map<String, String> getHeaderParams() {
-        Map<String, String> params = new HashMap<>();
-{{#formParams}}		params.put("{{paramName}}", this.{{paramName}} == null ? "" : this.{{paramName}}.toString());
-		{{/formParams}}
-		params.putAll(customHeaders);
-		return params;
+    public ApiRequest<{{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}}> withHttpInfo() {
+        return new Request();
     }
 
 	public static Builder builder() {
@@ -85,12 +77,12 @@ public class {{classname}} implements ApiRequest {
 		private final {{classname}} request;
 
 		private Builder() {
-			request = new {{classname}} ();
+			request = new {{classname}}();
 		}
 
 		{{#allParams}}
-		public Builder with{{paramName}}({{{dataType}}} {{paramName}}) {
-			request.set{{paramName}}({{paramName}});
+		public Builder with{{paramTitle}}({{{dataType}}} {{paramName}}) {
+			request.set{{paramTitle}}({{paramName}});
 			return this;
 		}
 		{{/allParams}}
@@ -98,6 +90,109 @@ public class {{classname}} implements ApiRequest {
 		public {{classname}} build() {
 			return request;
 		}
+	}
+
+	private class Request implements ApiRequest<{{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}}> {
+	    @Override
+        public String getPath() {
+            return PATH_TEMPLATE;
+        }
+
+        @Override
+        public String getMethod() {
+            return HTTP_METHOD;
+        }
+
+        @Override
+        public List<Pair> getQueryParams() {
+            List<Pair> params = new ArrayList<>();{{#queryParams}}
+            if ({{classname}}.this.{{paramName}} != null) {
+                params.add(new Pair("{{paramName}}", {{classname}}.this.{{paramName}}.toString()));
+            }
+            {{/queryParams}}
+            return Collections.unmodifiableList(params);
+        }
+
+        @Override
+        public Map<String, String> getPathParams() {
+            Map<String, String> params = new HashMap<>();{{#pathParams}}
+            if ({{classname}}.this.{{paramName}} != null) {
+                params.put("{{paramName}}", {{classname}}.this.{{paramName}}.toString());
+            }{{/pathParams}}
+            return Collections.unmodifiableMap(params);
+        }
+
+        @Override
+        public Map<String, Object> getFormParams() {
+            Map<String, Object> params = new HashMap<>();{{#formParams}}
+            if ({{classname}}.this.{{paramName}} != null) {
+                params.put("{{paramName}}", {{classname}}.this.{{paramName}});
+            }{{/formParams}}
+            return Collections.unmodifiableMap(params);
+        }
+
+        @Override
+        public Map<String, String> getHeaderParams() {
+            Map<String, String> params = new HashMap<>();{{#headerParams}}
+            if ({{classname}}.this.{{paramName}} != null) {
+                params.put("{{paramName}}", {{classname}}.this.{{paramName}}.toString());
+            }{{/headerParams}}
+            return Collections.unmodifiableMap(params);
+        }
+
+        @Override
+        public Map<String, String> getHeaders() {
+            Map<String, String> headers = new HashMap<>();
+            headers.putAll(getHeaderParams());
+
+            headers.put("Content-Type", getContentType());
+            String accepts = getAccepts();
+            if (accepts != null) {
+                headers.put("Accepts", accepts);
+            }
+
+            Map<String, String> customHeaders = {{classname}}.this.customHeaders;
+            if (customHeaders != null) {
+                headers.putAll(customHeaders);
+            }
+            return Collections.unmodifiableMap(headers);
+        }
+
+        @Override
+        public String getContentType() {
+            if (CONTENT_TYPES.length == 0) {
+                return "application/json";
+            }
+            for (String contentType : CONTENT_TYPES) {
+                if (JSON_MIME_PATTERN.matcher(contentType).matches()) {
+                    return contentType;
+                }
+            }
+            return CONTENT_TYPES[0];
+        }
+
+        @Override
+        public String getAccepts() {
+            if (ACCEPTS.length == 0) {
+                return null;
+            }
+            for (String accept : ACCEPTS) {
+                if (JSON_MIME_PATTERN.matcher(accept).matches()) {
+                    return accept;
+                }
+            }
+            return ACCEPTS_JOINED;
+        }
+
+        @Override
+        public {{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}} getBody() {
+            return {{#bodyParam}}{{classname}}.this.{{paramName}}{{/bodyParam}}{{^bodyParam}}null{{/bodyParam}};
+        }
+
+        @Override
+        public String[] getAuthNames() {
+            return AUTH_NAMES;
+        }
 	}
 }
 {{/operation}}
