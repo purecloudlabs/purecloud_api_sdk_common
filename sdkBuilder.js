@@ -11,7 +11,7 @@ try {
 		.version('1.0.0')
 		.option('--config <path>', 'Path to SDK config file')
 		.option('--localconfig <path>', 'Path to SDK local config file')
-		.option('--sdk [language]', 'Generate the SDK for the given swager-codegen language using the default config', /^(purecloudjava)$/i)
+		.option('--sdk [language]', 'Generate the SDK for the given swager-codegen language using the default config', /^(purecloudjava|pureclouddotnet)$/i)
 		.parse(process.argv);
 
 	if (program.sdk) {
