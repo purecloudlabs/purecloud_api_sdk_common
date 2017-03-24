@@ -16,14 +16,14 @@ public class ApacheHttpClientConnectorProvider implements ApiClientConnectorProv
     public ApiClientConnector create(ApiClientConnectorProperties properties) {
         RequestConfig.Builder requestBuilder = RequestConfig.custom();
 
-        Integer connectionTimeout = properties.getProperty(ApiClientConnectorProperty.CONNECTION_TIMEOUT, null);
+        Integer connectionTimeout = properties.getProperty(ApiClientConnectorProperty.CONNECTION_TIMEOUT, Integer.class, null);
         if (connectionTimeout != null && connectionTimeout > 0) {
             requestBuilder = requestBuilder.setConnectTimeout(connectionTimeout)
                     .setSocketTimeout(connectionTimeout)
                     .setConnectionRequestTimeout(connectionTimeout);
         }
 
-        DetailLevel detailLevel = properties.getProperty(ApiClientConnectorProperty.DETAIL_LEVEL, DetailLevel.MINIMAL);
+        DetailLevel detailLevel = properties.getProperty(ApiClientConnectorProperty.DETAIL_LEVEL, DetailLevel.class, DetailLevel.MINIMAL);
         SLF4JInterceptor interceptor = new SLF4JInterceptor(detailLevel);
 
         CloseableHttpClient client = HttpClients.custom()

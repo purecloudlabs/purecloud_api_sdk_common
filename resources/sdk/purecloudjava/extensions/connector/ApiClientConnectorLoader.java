@@ -23,7 +23,7 @@ public class ApiClientConnectorLoader {
     }
 
     private static ApiClientConnector loadFromProperties(ApiClientConnectorProperties properties) {
-        Object connectorProviderProperty = properties.getProperty(ApiClientConnectorProperty.CONNECTOR_PROVIDER, null);
+        Object connectorProviderProperty = properties.getProperty(ApiClientConnectorProperty.CONNECTOR_PROVIDER, Object.class, null);
         if (connectorProviderProperty == null) {
             return null;
         }

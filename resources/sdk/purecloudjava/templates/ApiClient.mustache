@@ -36,7 +36,9 @@ import {{invokerPackage}}.auth.ApiKeyAuth;
 import {{invokerPackage}}.auth.OAuth;
 import {{invokerPackage}}.ApiDateFormat;
 import {{invokerPackage}}.connector.ApiClientConnector;
-import {{invokerPackage}}.connector.apache.ApacheHttpClientConnector;
+import {{invokerPackage}}.connector.ApiClientConnectorLoader;
+import {{invokerPackage}}.connector.ApiClientConnectorProperties;
+import {{invokerPackage}}.connector.ApiClientConnectorProperty;
 
 {{>generatedAnnotation}}
 public class ApiClient implements AutoCloseable {
@@ -55,14 +57,14 @@ public class ApiClient implements AutoCloseable {
 
     private final Map<String, String> defaultHeaderMap;
     private final String basePath;
-    private final Integer connectionTimeout;
     private final Boolean shouldThrowErrors;
 
     private final DateFormat dateFormat;
     private final ObjectMapper objectMapper;
 
+    private final ConnectorProperties properties;
+
     private final Map<String, Authentication> authentications;
-    private final SLF4JInterceptor.DetailLevel detailLevel; //TODO refactor out
     private final ApiClientConnector connector;
 
     public ApiClient() {
@@ -77,8 +79,7 @@ public class ApiClient implements AutoCloseable {
         this.basePath = basePath;
 
         this.defaultHeaderMap = new HashMap<>(builder.defaultHeaderMap);
-        this.connectionTimeout = builder.connectionTimeout;
-        this.detailLevel = builder.detailLevel;
+        this.properties = builder.properties.copy();
         this.shouldThrowErrors = builder.shouldThrowErrors == null ? true : builder.shouldThrowErrors;
 
         DateFormat dateFormat = builder.dateFormat;
@@ -133,31 +134,8 @@ public class ApiClient implements AutoCloseable {
         return authentications;
     }
 
-    private CloseableHttpClient buildHttpClient(Builder builder) {
-        SLF4JInterceptor loggingInterceptor = new SLF4JInterceptor();
-        SLF4JInterceptor.DetailLevel detailLevel = builder.detailLevel;
-        if (detailLevel != null) {
-            loggingInterceptor.setDetailLevel(detailLevel);
-        }
-
-        RequestConfig.Builder requestBuilder = RequestConfig.custom();
-        Integer connectionTimeout = builder.connectionTimeout;
-        if (connectionTimeout != null && connectionTimeout > 0) {
-            requestBuilder = requestBuilder.setConnectTimeout(connectionTimeout)
-                    .setSocketTimeout(connectionTimeout)
-                    .setConnectionRequestTimeout(connectionTimeout);
-        }
-
-        return HttpClients.custom()
-                .setDefaultRequestConfig(requestBuilder.build())
-                .addInterceptorFirst((HttpRequestInterceptor) loggingInterceptor)
-                .addInterceptorFirst((HttpResponseInterceptor) loggingInterceptor)
-                .build();
-    }
-
     private ApiClientConnector buildHttpConnector(Builder builder) {
-        CloseableHttpClient client = buildHttpClient(builder);
-        return new ApacheHttpClientConnector(client);
+        return ApiClientConnectorLoader.load(properties);
     }
 
     public boolean getShouldThrowErrors() {
@@ -185,7 +163,7 @@ public class ApiClient implements AutoCloseable {
      * Connect timeout (in milliseconds).
      */
     public int getConnectTimeout() {
-        return (connectionTimeout == null) ? 0 : connectionTimeout;
+        return properties.getProperty(ApiClientConnectorProperty.CONNECTION_TIMEOUT, Integer.class, 0);
     }
 
     /**
@@ -840,14 +818,14 @@ public class ApiClient implements AutoCloseable {
 
     public static class Builder {
         public static Builder standard() {
-            return new Builder();
+            return new Builder(new ConnectorProperties());
         }
 
         public static Builder from(ApiClient client) {
             if (client == null) {
                 throw new NullPointerException();
             }
-            Builder builder = new Builder();
+            Builder builder = new Builder(client.properties);
             builder.defaultHeaderMap.putAll(client.defaultHeaderMap);
             for (Authentication authentication : client.authentications.values()) {
                 if (authentication instanceof OAuth) {
@@ -857,9 +835,7 @@ public class ApiClient implements AutoCloseable {
             builder.dateFormat = client.dateFormat;
             builder.objectMapper = client.objectMapper;
             builder.basePath = client.basePath;
-            builder.connectionTimeout = client.connectionTimeout;
             builder.shouldThrowErrors = client.shouldThrowErrors;
-            builder.detailLevel = client.detailLevel;
             return builder;
         }
 
@@ -868,15 +844,15 @@ public class ApiClient implements AutoCloseable {
         }
 
         private final Map<String, String> defaultHeaderMap = new HashMap<>();
+        private final ConnectorProperties properties;
         private String accessToken;
         private ObjectMapper objectMapper;
         private DateFormat dateFormat;
         private String basePath;
-        private Integer connectionTimeout = 0;
         private Boolean shouldThrowErrors = true;
-        private SLF4JInterceptor.DetailLevel detailLevel;
 
-        private Builder() {
+        private Builder(ConnectorProperties properties) {
+            this.properties = (properties != null) ? properties.copy() : new ConnectorProperties();
             withUserAgent(DEFAULT_USER_AGENT);
         }
 
@@ -910,7 +886,7 @@ public class ApiClient implements AutoCloseable {
         }
 
         public Builder withConnectionTimeout(int connectionTimeout) {
-            this.connectionTimeout = connectionTimeout;
+            properties.setProperty(ApiClientConnectorProperty.CONNECTION_TIMEOUT, connectionTimeout);
             return this;
         }
 
@@ -919,13 +895,45 @@ public class ApiClient implements AutoCloseable {
             return this;
         }
 
-        public Builder withDetailLevel(SLF4JInterceptor.DetailLevel detailLevel) {
-            this.detailLevel = detailLevel;
+        public Builder withDetailLevel(DetailLevel detailLevel) {
+            properties.setProperty(ApiClientConnectorProperty.DETAIL_LEVEL, detailLevel);
             return this;
         }
 
         public ApiClient build() {
             return new ApiClient(this);
+        }
+    }
+
+    private static class ConnectorProperties implements ApiClientConnectorProperties {
+        private final Map<String, Object> properties;
+
+        public ConnectorProperties() {
+            this.properties = new HashMap<>();
+        }
+
+        public ConnectorProperties(Map<String, Object> properties) {
+            this.properties = new HashMap<>();
+            if (properties != null) {
+                this.properties.putAll(properties);
+            }
+        }
+
+        @Override
+        public <T> T getProperty(String key, Class<T> propertyClass, T defaultValue) {
+            Object value = properties.get(key);
+            if (propertyClass.isInstance(value)) {
+                return propertyClass.cast(value);
+            }
+            return defaultValue;
+        }
+
+        public void setProperty(String key, Object value) {
+            properties.put(key, value);
+        }
+
+        public ConnectorProperties copy() {
+            return new ConnectorProperties(properties);
         }
     }
 }
