@@ -1,5 +1,6 @@
 package com.mypurecloud.sdk.v2.connector.apache;
 
+import com.google.common.util.concurrent.SettableFuture;
 import com.mypurecloud.sdk.v2.AsyncApiCallback;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnector;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnectorRequest;
@@ -10,13 +11,17 @@ import org.apache.http.impl.client.CloseableHttpClient;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 public class ApacheHttpClientConnector implements ApiClientConnector {
     private final CloseableHttpClient client;
+    private final ExecutorService executorService;
 
-    public ApacheHttpClientConnector(CloseableHttpClient client) {
+    public ApacheHttpClientConnector(CloseableHttpClient client, ExecutorService executorService) {
         this.client = client;
+        this.executorService = executorService;
     }
 
     @Override
@@ -66,7 +71,34 @@ public class ApacheHttpClientConnector implements ApiClientConnector {
 
     @Override
     public Future<ApiClientConnectorResponse> invokeAsync(ApiClientConnectorRequest request, AsyncApiCallback<ApiClientConnectorResponse> callback) {
-        throw new RuntimeException("Not yet implemented");
+        SettableFuture<ApiClientConnectorResponse> future = SettableFuture.create();
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ApiClientConnectorResponse response = invoke(request);
+                    callback.onCompleted(response);
+                    future.set(response);
+                }
+                catch (Throwable exception) {
+                    callback.onFailed(exception);
+                    future.setException(exception);
+                }
+            }
+        };
+        try {
+            if (executorService != null) {
+                executorService.submit(task);
+            }
+            else {
+                task.run();
+            }
+        }
+        catch (Throwable exception) {
+            callback.onFailed(exception);
+            future.setException(exception);
+        }
+        return future;
     }
 
     @Override

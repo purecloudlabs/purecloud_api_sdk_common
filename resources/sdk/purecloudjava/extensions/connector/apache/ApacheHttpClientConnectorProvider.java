@@ -1,5 +1,6 @@
 package com.mypurecloud.sdk.v2.connector.apache;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.mypurecloud.sdk.v2.DetailLevel;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnector;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnectorProperties;
@@ -10,6 +11,9 @@ import org.apache.http.HttpResponseInterceptor;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ApacheHttpClientConnectorProvider implements ApiClientConnectorProvider {
     @Override
@@ -32,6 +36,11 @@ public class ApacheHttpClientConnectorProvider implements ApiClientConnectorProv
                 .addInterceptorFirst((HttpResponseInterceptor) interceptor)
                 .build();
 
-        return new ApacheHttpClientConnector(client);
+        ExecutorService executorService = properties.getProperty(ApiClientConnectorProperty.ASYNC_EXECUTOR_SERVICE, ExecutorService.class, null);
+        if (executorService == null) {
+            executorService = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("purecloud-sdk-%d").build());
+        }
+
+        return new ApacheHttpClientConnector(client, executorService);
     }
 }

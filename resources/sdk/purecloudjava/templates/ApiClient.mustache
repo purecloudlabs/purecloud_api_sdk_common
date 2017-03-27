@@ -17,6 +17,10 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import com.google.common.util.concurrent.SettableFuture;
 
 import {{invokerPackage}}.auth.Authentication;
 import {{invokerPackage}}.auth.HttpBasicAuth;
@@ -504,6 +508,69 @@ public class ApiClient implements AutoCloseable {
         }
     }
 
+    private <T> Future<ApiResponse<T>> getAPIResponseAsync(ApiRequest<?> request, TypeReference<T> returnType, AsyncApiCallback<ApiResponse<T>> callback) {
+        SettableFuture<ApiResponse<T>> future = SettableFuture.create();
+        try {
+            ApiClientConnectorRequest connectorRequest = prepareConnectorRequest(request);
+            connector.invokeAsync(connectorRequest, new AsyncApiCallback<ApiClientConnectorResponse>() {
+                @Override
+                public void onCompleted(ApiClientConnectorResponse connectorResponse) {
+                    try {
+                        ApiResponse<T> response;
+                        try {
+                            response = interpretConnectorResponse(connectorResponse, returnType);
+                        }
+                        finally {
+                            connectorResponse.close();
+                        }
+                        notifySuccess(future, callback, response);
+                    }
+                    catch (Throwable exception) {
+                        notifyFailure(future, callback, exception);
+                    }
+                }
+
+                @Override
+                public void onFailed(Throwable exception) {
+                    notifyFailure(future, callback, exception);
+                }
+            });
+        }
+        catch (Throwable exception) {
+            notifyFailure(future, callback, exception);
+        }
+        return future;
+    }
+
+    private <T> void notifySuccess(SettableFuture<T> future, AsyncApiCallback<T> callback, T result) {
+        if (callback != null) {
+            try {
+                callback.onCompleted(result);
+                future.set(result);
+            }
+            catch (Throwable exception) {
+                future.setException(exception);
+            }
+        }
+        else {
+            future.set(result);
+        }
+    }
+
+    private <T> void notifyFailure(SettableFuture<T> future, AsyncApiCallback<T> callback, Throwable exception) {
+        if (callback != null) {
+            try {
+                callback.onFailed(exception);
+                future.setException(exception);
+            }
+            catch (Throwable callbackException) {
+                future.setException(callbackException);
+            }
+        }
+        else {
+            future.setException(exception);
+        }
+    }
 
     /**
      * Invoke API by sending HTTP request with the given options.
@@ -520,135 +587,12 @@ public class ApiClient implements AutoCloseable {
      * @return The response body in type of string
      */
     public <T> ApiResponse<T> invokeAPIVerbose(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
-        return invokeAPIVerbose(new ApiRequest<Object>() {
-            @Override
-            public String getPath() {
-                return path;
-            }
-
-            @Override
-            public String getMethod() {
-                return method;
-            }
-
-            @Override
-            public Map<String, String> getPathParams() {
-                return Collections.emptyMap();
-            }
-
-            @Override
-            public List<Pair> getQueryParams() {
-                return queryParams;
-            }
-
-            @Override
-            public Map<String, Object> getFormParams() {
-                return formParams;
-            }
-
-            @Override
-            public Map<String, String> getHeaderParams() {
-                return headerParams;
-            }
-
-            @Override
-            public Map<String, String> getCustomHeaders() {
-                return Collections.emptyMap();
-            }
-
-            @Override
-            public String getContentType() {
-                return contentType;
-            }
-
-            @Override
-            public String getAccepts() {
-                return accept;
-            }
-
-            @Override
-            public Object getBody() {
-                return body;
-            }
-
-            @Override
-            public String[] getAuthNames() {
-                return authNames;
-            }
-        }, returnType);
-
-        /*
-        ApiResponse<T> response = null;
-        try {
-            try {
-                response = getAPIResponse(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames);
-            } catch (IOException e) {
-                throw new ApiException(e);
-            }
-
-            int statusCode = response.getStatusCode();
-            Map<String, List<String>> responseHeaders = response.getHeaders();
-
-            // Parse response body
-            if (statusCode >= 200 && statusCode < 300) {
-                HttpEntity entity = response.getHttpResponse().getEntity();
-                try {
-                    if (statusCode != 204 && entity != null && returnType != null) {
-                        String rawResponseBody = EntityUtils.toString(entity);
-                        response.setRawResponseBody(rawResponseBody);
-                        if (rawResponseBody != null && !rawResponseBody.isEmpty()) {
-                            @SuppressWarnings("unchecked")
-                            T responseObject = (T) objectMapper.readValue(rawResponseBody, returnType);
-                            response.setResponseObject(responseObject);
-                        }
-                    }
-                } catch (IOException e) {
-                    throw new ApiException(e);
-                }
-            } else if (statusCode == HttpStatus.SC_NO_CONTENT) {
-                // No body, it's cool.
-            } else {
-                String message = "error";
-                String respBody = null;
-                HttpEntity entity = response.getHttpResponse().getEntity();
-                if (entity != null) {
-                    try {
-                        respBody = EntityUtils.toString(entity);
-                        message = respBody;
-                    } catch (RuntimeException | IOException e) {
-                        // e.printStackTrace();
-                    }
-                }
-                throw new ApiException(statusCode,
-                        message,
-                        response.getResponseHeaders(),
-                        respBody);
-            }
-
-            return response;
-        } catch (ApiException e) {
-            if (shouldThrowErrors)
-                throw e;
-            else if (response == null)
-                response = new ApiResponse<>(null, null);
-            response.setException(e);
-            return response;
-        } finally {
-            try {
-                if (response != null && response.getHttpResponse() != null) {
-                    response.getHttpResponse().close();
-                }
-            } catch (IOException e) {
-                //e.printStackTrace();
-            }
-        }
-        */
+        return invokeAPIVerbose(new ApiRequestWrapper<>(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames), returnType);
     }
 
     public <T> ApiResponse<T> invokeAPIVerbose(ApiRequest<?> request, TypeReference<T> returnType) throws ApiException {
         try {
-            ApiResponse<T> response = getAPIResponse(request, returnType);
-            return response;
+            return getAPIResponse(request, returnType);
         }
         catch (Exception exception) {
             if (shouldThrowErrors) {
@@ -657,50 +601,32 @@ public class ApiClient implements AutoCloseable {
                 }
                 throw new ApiException(exception);
             }
-            return new ApiResponse<T>() {
+            return new ApiExceptionResponse<>(exception);
+        }
+    }
+
+    public <T> Future<ApiResponse<T>> invokeAPIVerboseAsync(ApiRequest<?> request, TypeReference<T> returnType, AsyncApiCallback<ApiResponse<T>> callback) {
+        if (shouldThrowErrors) {
+            return getAPIResponseAsync(request, returnType, callback);
+        }
+        else {
+            SettableFuture<ApiResponse<T>> future = SettableFuture.create();
+            getAPIResponseAsync(request, returnType, new AsyncApiCallback<ApiResponse<T>>() {
                 @Override
-                public Exception getException() {
-                    return exception;
+                public void onCompleted(ApiResponse<T> response) {
+                    notifySuccess(future, callback, response);
                 }
 
                 @Override
-                public Integer getStatusCode() {
-                    return null;
-                }
+                public void onFailed(Throwable exception) {
+                    if (!(exception instanceof Exception)) {
+                        exception = new ExecutionException(exception);
 
-                @Override
-                public boolean hasRawBody() {
-                    return false;
+                    }
+                    notifySuccess(future, callback, new ApiExceptionResponse<>((Exception)exception));
                 }
-
-                @Override
-                public String getRawBody() {
-                    return null;
-                }
-
-                @Override
-                public T getBody() {
-                    return null;
-                }
-
-                @Override
-                public Map<String, String> getHeaders() {
-                    return null;
-                }
-
-                @Override
-                public String getHeader(String key) {
-                    return null;
-                }
-
-                @Override
-                public String getCorrelationId() {
-                    return null;
-                }
-
-                @Override
-                public void close() throws Exception { }
-            };
+            });
+            return future;
         }
     }
 
@@ -748,6 +674,22 @@ public class ApiClient implements AutoCloseable {
             else
                 return response;
         }
+    }
+
+    public <T> Future<T> invokeAPIAsync(ApiRequest<?> request, TypeReference<T> returnType, AsyncApiCallback<T> callback) {
+        SettableFuture<T> future = SettableFuture.create();
+        invokeAPIVerboseAsync(request, returnType, new AsyncApiCallback<ApiResponse<T>>() {
+            @Override
+            public void onCompleted(ApiResponse<T> response) {
+                notifySuccess(future, callback, response.getBody());
+            }
+
+            @Override
+            public void onFailed(Throwable exception) {
+                notifySuccess(future, callback, null);
+            }
+        });
+        return future;
     }
 
     /**
@@ -908,5 +850,135 @@ public class ApiClient implements AutoCloseable {
         public ConnectorProperties copy() {
             return new ConnectorProperties(properties);
         }
+    }
+
+    private static class ApiRequestWrapper<T> implements ApiRequest<T> {
+        private final String path;
+        private final String method;
+        private final List<Pair> queryParams;
+        private final T body;
+        private final Map<String, String> headerParams;
+        private final Map<String, Object> formParams;
+        private final String accept;
+        private final String contentType;
+        private final String[] authNames;
+
+        public ApiRequestWrapper(String path, String method, List<Pair> queryParams, T body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames) {
+            this.path = path;
+            this.method = method;
+            this.queryParams = queryParams;
+            this.body = body;
+            this.headerParams = headerParams;
+            this.formParams = formParams;
+            this.accept = accept;
+            this.contentType = contentType;
+            this.authNames = authNames;
+        }
+
+        @Override
+        public String getPath() {
+            return path;
+        }
+
+        @Override
+        public String getMethod() {
+            return method;
+        }
+
+        @Override
+        public Map<String, String> getPathParams() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public List<Pair> getQueryParams() {
+            return queryParams;
+        }
+
+        @Override
+        public Map<String, Object> getFormParams() {
+            return formParams;
+        }
+
+        @Override
+        public Map<String, String> getHeaderParams() {
+            return headerParams;
+        }
+
+        @Override
+        public Map<String, String> getCustomHeaders() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
+        }
+
+        @Override
+        public String getAccepts() {
+            return accept;
+        }
+
+        @Override
+        public T getBody() {
+            return body;
+        }
+
+        @Override
+        public String[] getAuthNames() {
+            return authNames;
+        }
+    }
+
+    private static class ApiExceptionResponse<T> implements ApiResponse<T> {
+        private final Exception exception;
+
+        public ApiExceptionResponse(Exception exception) {
+            this.exception = exception;
+        }
+
+        @Override
+        public Exception getException() {
+            return exception;
+        }
+
+        @Override
+        public Integer getStatusCode() {
+            return 500;
+        }
+
+        @Override
+        public boolean hasRawBody() {
+            return false;
+        }
+
+        @Override
+        public String getRawBody() {
+            return "";
+        }
+
+        @Override
+        public T getBody() {
+            return null;
+        }
+
+        @Override
+        public Map<String, String> getHeaders() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public String getHeader(String key) {
+            return "";
+        }
+
+        @Override
+        public String getCorrelationId() {
+            return "";
+        }
+
+        @Override
+        public void close() throws Exception { }
     }
 }
