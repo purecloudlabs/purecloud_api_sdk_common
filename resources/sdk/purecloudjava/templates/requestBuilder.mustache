@@ -3,6 +3,7 @@ package {{package}};
 import {{invokerPackage}}.ApiException;
 import {{invokerPackage}}.ApiClient;
 import {{invokerPackage}}.ApiRequest;
+import {{invokerPackage}}.ApiRequestBuilder;
 import {{invokerPackage}}.ApiResponse;
 import {{invokerPackage}}.Configuration;
 import {{modelPackage}}.*;
@@ -22,11 +23,6 @@ import java.util.regex.Pattern;
 
 {{#operation}}
 public class {{classname}} {
-    private static final String HTTP_METHOD = "{{httpMethod}}";
-    private static final String PATH_TEMPLATE = "{{path}}";
-    private static final String[] CONTENT_TYPES = new String[] { {{#consumes}}"{{mediaType}}"{{#hasMore}}, {{/hasMore}}{{/consumes}} };
-    private static final String[] ACCEPTS = new String[] { {{#produces}}"{{mediaType}}"{{#hasMore}}, {{/hasMore}}{{/produces}} };
-    private static final String ACCEPTS_JOINED = "{{#produces}}{{mediaType}}{{#hasMore}},{{/hasMore}}{{/produces}}";
     private static final Pattern JSON_MIME_PATTERN = Pattern.compile("(?i)application\\/json(;.*)?");
     private static final String[] AUTH_NAMES = new String[] { };
 
@@ -65,8 +61,30 @@ public class {{classname}} {
         return this;
     }
 
-    public ApiRequest<{{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}}> withHttpInfo() {
-        return new Request();
+    public ApiRequest<{{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}}> withHttpInfo() throws ApiException {
+        {{#allParams}}{{#required}}
+        // verify the required parameter '{{paramName}}' is set
+        if (this.{{paramName}} == null) {
+            throw new ApiException(400, "Missing the required parameter '{{paramName}}' when building request for {{classname}}.");
+        }
+        {{/required}}{{/allParams}}
+
+        return ApiRequestBuilder.create("{{httpMethod}}", "{{path}}"){{#pathParams}}
+                .withPathParameter("{{{baseName}}}", {{paramName}})
+        {{/pathParams}}{{#queryParams}}
+                .withQueryParameters("{{{baseName}}}", "{{#collectionFormat}}{{{collectionFormat}}}{{/collectionFormat}}", {{paramName}})
+        {{/queryParams}}{{#formParams}}
+                .withFormParameter("{{{baseName}}}", {{paramName}})
+        {{/formParams}}{{#headerParams}}
+                .withHeaderParameter("{{{baseName}}}", {{paramName}})
+        {{/headerParams}}{{#bodyParam}}
+                .withBody({{paramName}})
+        {{/bodyParam}}
+                .withCustomHeaders(customHeaders)
+                .withContentTypes({{#consumes}}"{{mediaType}}"{{#hasMore}}, {{/hasMore}}{{/consumes}})
+                .withAccepts({{#produces}}"{{mediaType}}"{{#hasMore}}, {{/hasMore}}{{/produces}})
+                .withAuthNames({{#authMethods}}"{{name}}"{{#hasMore}}, {{/hasMore}}{{/authMethods}})
+                .build();
     }
 
 	public static Builder builder() {
@@ -96,109 +114,6 @@ public class {{classname}} {
 		public {{classname}} build() {
 			return request;
 		}
-	}
-
-	private class Request implements ApiRequest<{{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}}> {
-	    @Override
-        public String getPath() {
-            return PATH_TEMPLATE;
-        }
-
-        @Override
-        public String getMethod() {
-            return HTTP_METHOD;
-        }
-
-        @Override
-        public List<Pair> getQueryParams() {
-            List<Pair> params = new ArrayList<>();{{#queryParams}}
-            if ({{classname}}.this.{{paramName}} != null) {
-                params.add(new Pair("{{paramName}}", {{classname}}.this.{{paramName}}.toString()));
-            }
-            {{/queryParams}}
-            return Collections.unmodifiableList(params);
-        }
-
-        @Override
-        public Map<String, String> getPathParams() {
-            Map<String, String> params = new HashMap<>();{{#pathParams}}
-            if ({{classname}}.this.{{paramName}} != null) {
-                params.put("{{paramName}}", {{classname}}.this.{{paramName}}.toString());
-            }{{/pathParams}}
-            return Collections.unmodifiableMap(params);
-        }
-
-        @Override
-        public Map<String, Object> getFormParams() {
-            Map<String, Object> params = new HashMap<>();{{#formParams}}
-            if ({{classname}}.this.{{paramName}} != null) {
-                params.put("{{paramName}}", {{classname}}.this.{{paramName}});
-            }{{/formParams}}
-            return Collections.unmodifiableMap(params);
-        }
-
-        @Override
-        public Map<String, String> getHeaderParams() {
-            Map<String, String> params = new HashMap<>();{{#headerParams}}
-            if ({{classname}}.this.{{paramName}} != null) {
-                params.put("{{paramName}}", {{classname}}.this.{{paramName}}.toString());
-            }{{/headerParams}}
-            return Collections.unmodifiableMap(params);
-        }
-
-        @Override
-        public Map<String, String> getHeaders() {
-            Map<String, String> headers = new HashMap<>();
-            headers.putAll(getHeaderParams());
-
-            headers.put("Content-Type", getContentType());
-            String accepts = getAccepts();
-            if (accepts != null) {
-                headers.put("Accepts", accepts);
-            }
-
-            Map<String, String> customHeaders = {{classname}}.this.customHeaders;
-            if (customHeaders != null) {
-                headers.putAll(customHeaders);
-            }
-            return Collections.unmodifiableMap(headers);
-        }
-
-        @Override
-        public String getContentType() {
-            if (CONTENT_TYPES.length == 0) {
-                return "application/json";
-            }
-            for (String contentType : CONTENT_TYPES) {
-                if (JSON_MIME_PATTERN.matcher(contentType).matches()) {
-                    return contentType;
-                }
-            }
-            return CONTENT_TYPES[0];
-        }
-
-        @Override
-        public String getAccepts() {
-            if (ACCEPTS.length == 0) {
-                return null;
-            }
-            for (String accept : ACCEPTS) {
-                if (JSON_MIME_PATTERN.matcher(accept).matches()) {
-                    return accept;
-                }
-            }
-            return ACCEPTS_JOINED;
-        }
-
-        @Override
-        public {{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}} getBody() {
-            return {{#bodyParam}}{{classname}}.this.{{paramName}}{{/bodyParam}}{{^bodyParam}}null{{/bodyParam}};
-        }
-
-        @Override
-        public String[] getAuthNames() {
-            return AUTH_NAMES;
-        }
 	}
 }
 {{/operation}}

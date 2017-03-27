@@ -1,6 +1,6 @@
 package com.mypurecloud.sdk.v2.connector.apache;
 
-import com.mypurecloud.sdk.v2.ApiResponse;
+import com.mypurecloud.sdk.v2.connector.ApiClientConnectorResponse;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -10,9 +10,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 
-class ApacheHttpResponse implements ApiResponse<String> {
+class ApacheHttpResponse implements ApiClientConnectorResponse {
     private static final Logger LOG = LoggerFactory.getLogger(ApacheHttpResponse.class);
 
     private final CloseableHttpResponse response;
@@ -32,37 +33,25 @@ class ApacheHttpResponse implements ApiResponse<String> {
     }
 
     @Override
-    public Exception getException() {
-        return null;
-    }
-
-    @Override
-    public Integer getStatusCode() {
+    public int getStatusCode() {
         return response.getStatusLine().getStatusCode();
     }
 
     @Override
-    public boolean hasRawBody() {
-        return false;
+    public boolean hasBody() {
+        return (response.getEntity() != null);
     }
 
     @Override
-    public String getRawBody() {
-        return null;
+    public InputStream getBody() throws IOException {
+        HttpEntity entity = response.getEntity();
+        return (entity != null) ? entity.getContent() : null;
     }
 
     @Override
-    public String getBody() {
-        try {
-            HttpEntity entity = response.getEntity();
-            if (entity != null) {
-                return EntityUtils.toString(entity);
-            }
-            return null;
-        }
-        catch (IOException exception) {
-            throw new RuntimeException(exception);
-        }
+    public String readBody() throws IOException {
+        HttpEntity entity = response.getEntity();
+        return (entity != null) ? EntityUtils.toString(entity) : null;
     }
 
     @Override
@@ -72,17 +61,6 @@ class ApacheHttpResponse implements ApiResponse<String> {
             map.put(header.getName(), header.getValue());
         }
         return Collections.unmodifiableMap(map);
-    }
-
-    @Override
-    public String getHeader(String key) {
-        Header header = response.getFirstHeader(key);
-        return (header != null) ? header.getValue() : null;
-    }
-
-    @Override
-    public String getCorrelationId() {
-        return getHeader("ININ-Correlation-ID");
     }
 
     @Override

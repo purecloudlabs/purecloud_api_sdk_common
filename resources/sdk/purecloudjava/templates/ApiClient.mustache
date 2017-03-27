@@ -7,21 +7,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpRequestInterceptor;
-import org.apache.http.HttpResponseInterceptor;
-import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.*;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -35,10 +23,7 @@ import {{invokerPackage}}.auth.HttpBasicAuth;
 import {{invokerPackage}}.auth.ApiKeyAuth;
 import {{invokerPackage}}.auth.OAuth;
 import {{invokerPackage}}.ApiDateFormat;
-import {{invokerPackage}}.connector.ApiClientConnector;
-import {{invokerPackage}}.connector.ApiClientConnectorLoader;
-import {{invokerPackage}}.connector.ApiClientConnectorProperties;
-import {{invokerPackage}}.connector.ApiClientConnectorProperty;
+import {{invokerPackage}}.connector.*;
 
 {{>generatedAnnotation}}
 public class ApiClient implements AutoCloseable {
@@ -349,7 +334,14 @@ public class ApiClient implements AutoCloseable {
      * @param queryParams The query parameters
      * @return The full URL
      */
-    private String buildUrl(String path, List<Pair> queryParams) {
+    private String buildUrl(String path, Map<String, String> pathParams, List<Pair> queryParams) {
+        path = path.replaceAll("\\{format\\}", "json");
+        if (pathParams != null && !pathParams.isEmpty()) {
+            for (Map.Entry<String, String> entry : pathParams.entrySet()) {
+                path = path.replaceAll("\\{" + entry.getKey() + "\\}", entry.getValue());
+            }
+        }
+
         final StringBuilder url = new StringBuilder();
         url.append(basePath).append(path);
 
@@ -373,94 +365,74 @@ public class ApiClient implements AutoCloseable {
         return url.toString();
     }
 
-    private ApiRequest<String> prepareConnectorRequest(ApiRequest<?> request) throws Exception {
+    private ApiClientConnectorRequest prepareConnectorRequest(ApiRequest<?> request) throws Exception {
         final String path = request.getPath();
         final List<Pair> queryParams = new ArrayList<>(request.getQueryParams());
-        final Map<String, Object> formParams = new HashMap<>(request.getFormParams());
-        final Map<String, String> headers = new HashMap<>(request.getHeaders());
-        final Object body = request.getBody();
-        if (body != null && !formParams.isEmpty()) {
-            throw new ApiException(500, "Cannot have body and form params");
-        }
+        final Map<String, String> headers = new HashMap<>(request.getHeaderParams());
+        headers.putAll(request.getCustomHeaders());
 
         updateParamsForAuth(request.getAuthNames(), queryParams, headers);
-        final String url = buildUrl(path, queryParams);
+        final String url = buildUrl(path, request.getPathParams(), queryParams);
 
         for (String key : defaultHeaderMap.keySet()) {
             headers.putIfAbsent(key, defaultHeaderMap.get(key));
         }
 
-        final String serializedBody = (body != null) ? serialize(body) : null;
+        final Object body = request.getBody();
+        final Map<String, Object> formParams = request.getFormParams();
+        final String serializedBody;
+        if (body != null && !formParams.isEmpty()) {
+            throw new ApiException(500, "Cannot have body and form params");
+        }
+        else if (body != null) {
+            serializedBody = serialize(body);
+        }
+        else if (formParams != null) {
+            serializedBody = getXWWWFormUrlencodedParams(formParams);
+        }
+        else {
+            serializedBody = null;
+        }
 
-        return new ApiRequest<String>() {
-            @Override
-            public String getPath() {
-                return url;
-            }
-
+        return new ApiClientConnectorRequest() {
             @Override
             public String getMethod() {
                 return request.getMethod();
             }
 
             @Override
-            public Map<String, String> getPathParams() {
-                return request.getPathParams();
-            }
-
-            @Override
-            public List<Pair> getQueryParams() {
-                return request.getQueryParams();
-            }
-
-            @Override
-            public Map<String, Object> getFormParams() {
-                return request.getFormParams();
-            }
-
-            @Override
-            public Map<String, String> getHeaderParams() {
-                return request.getHeaderParams();
+            public String getUrl() {
+                return url;
             }
 
             @Override
             public Map<String, String> getHeaders() {
-                return request.getHeaders();
+                return headers;
             }
 
             @Override
-            public String getContentType() {
-                return request.getContentType();
+            public boolean hasBody() {
+                return (serializedBody != null);
             }
 
             @Override
-            public String getAccepts() {
-                return request.getAccepts();
-            }
-
-            @Override
-            public String getBody() {
+            public String readBody() throws IOException {
                 return serializedBody;
             }
 
             @Override
-            public String[] getAuthNames() {
-                return request.getAuthNames();
+            public InputStream getBody() throws IOException {
+                return (serializedBody != null) ? new ByteArrayInputStream(serializedBody.getBytes("UTF8")) : null;
             }
         };
     }
 
-    private <T> ApiResponse<T> interpretConnectorResponse(ApiResponse<String> response, TypeReference<T> returnType) throws Exception {
-        Exception exception = response.getException();
-        if (exception != null) {
-            throw exception;
-        }
-
+    private <T> ApiResponse<T> interpretConnectorResponse(ApiClientConnectorResponse response, TypeReference<T> returnType) throws Exception {
         int statusCode = response.getStatusCode();
         Map<String, String> headers = response.getHeaders();
 
         if (statusCode >= 200 && statusCode < 300) {
-            String body = response.getBody();
+            String body = response.readBody();
             final T entity;
             if (statusCode != 204 && body != null && returnType != null) {
                 if (returnType.getType() != Void.class) {
@@ -520,17 +492,18 @@ public class ApiClient implements AutoCloseable {
         }
         else {
             String message = "error";
-            String body = response.getBody();
+            String body = response.readBody();
             throw new ApiException(statusCode, message, headers, body);
         }
     }
 
     private <T> ApiResponse<T> getAPIResponse(ApiRequest<?> request, TypeReference<T> returnType) throws Exception {
-        ApiRequest<String> connectorRequest = prepareConnectorRequest(request);
-        try (ApiResponse<String> connectorResponse = connector.invoke(connectorRequest)) {
+        ApiClientConnectorRequest connectorRequest = prepareConnectorRequest(request);
+        try (ApiClientConnectorResponse connectorResponse = connector.invoke(connectorRequest)) {
             return interpretConnectorResponse(connectorResponse, returnType);
         }
     }
+
 
     /**
      * Invoke API by sending HTTP request with the given options.
@@ -579,8 +552,8 @@ public class ApiClient implements AutoCloseable {
             }
 
             @Override
-            public Map<String, String> getHeaders() {
-                return headerParams;
+            public Map<String, String> getCustomHeaders() {
+                return Collections.emptyMap();
             }
 
             @Override

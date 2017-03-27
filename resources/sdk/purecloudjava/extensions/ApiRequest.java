@@ -10,7 +10,7 @@ public interface ApiRequest<T> {
     List<Pair> getQueryParams();
     Map<String, Object> getFormParams();
     Map<String, String> getHeaderParams();
-    Map<String, String> getHeaders();
+    Map<String, String> getCustomHeaders();
     String getContentType();
     String getAccepts();
     T getBody();

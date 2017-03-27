@@ -1,19 +1,13 @@
 package com.mypurecloud.sdk.v2.connector.apache;
 
-import com.mypurecloud.sdk.v2.ApiRequest;
-import com.mypurecloud.sdk.v2.ApiResponse;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnector;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
+import com.mypurecloud.sdk.v2.connector.ApiClientConnectorRequest;
+import com.mypurecloud.sdk.v2.connector.ApiClientConnectorResponse;
 import org.apache.http.client.methods.*;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.message.BasicNameValuePair;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 
@@ -25,25 +19,19 @@ public class ApacheHttpClientConnector implements ApiClientConnector {
     }
 
     @Override
-    public ApiResponse<String> invoke(ApiRequest<String> request) throws Exception {
+    public ApiClientConnectorResponse invoke(ApiClientConnectorRequest request) throws Exception {
         // Build request object
         HttpUriRequest httpUriRequest;
         String method = request.getMethod();
-        String url = request.getPath();
-        String body = request.getBody();
+        String url = request.getUrl();
+        String body = request.readBody();
 
         if ("GET".equals(method)) {
             HttpGet req = new HttpGet(url);
             httpUriRequest = req;
         } else if ("POST".equals(method)) {
             HttpPost req = new HttpPost(url);
-            if (request.getContentType().startsWith("application/x-www-form-urlencoded")) {
-                List<NameValuePair> nvps = new ArrayList<>();
-                for (Map.Entry<String, Object> param : request.getFormParams().entrySet()) {
-                    nvps.add(new BasicNameValuePair(param.getKey(), param.getValue().toString()));
-                }
-                req.setEntity(new UrlEncodedFormEntity(nvps));
-            } else if (body != null) {
+            if (body != null) {
                 req.setEntity(new StringEntity(body, "UTF-8"));
             }
             httpUriRequest = req;
@@ -76,7 +64,7 @@ public class ApacheHttpClientConnector implements ApiClientConnector {
     }
 
     @Override
-    public Future<ApiResponse<String>> invokeAsync(ApiRequest<String> request) {
+    public Future<ApiClientConnectorResponse> invokeAsync(ApiClientConnectorRequest request) {
         throw new RuntimeException("Not yet implemented");
     }
 
