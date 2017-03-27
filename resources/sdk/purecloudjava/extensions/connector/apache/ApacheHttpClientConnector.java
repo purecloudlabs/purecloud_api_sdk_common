@@ -1,5 +1,6 @@
 package com.mypurecloud.sdk.v2.connector.apache;
 
+import com.mypurecloud.sdk.v2.AsyncApiCallback;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnector;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnectorRequest;
 import com.mypurecloud.sdk.v2.connector.ApiClientConnectorResponse;
@@ -64,7 +65,7 @@ public class ApacheHttpClientConnector implements ApiClientConnector {
     }
 
     @Override
-    public Future<ApiClientConnectorResponse> invokeAsync(ApiClientConnectorRequest request) {
+    public Future<ApiClientConnectorResponse> invokeAsync(ApiClientConnectorRequest request, AsyncApiCallback<ApiClientConnectorResponse> callback) {
         throw new RuntimeException("Not yet implemented");
     }
 
