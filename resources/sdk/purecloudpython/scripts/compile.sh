@@ -10,7 +10,7 @@ echo "RESOURCE_DIR=$RESOURCE_DIR"
 cp $SDK_REPO/LICENSE $BUILD_DIR/License.txt
 
 # Copy python config file
-cp $RESOURCE_DIR/setup.cfg $BUILD_DIR/setup.cfg
+cp $RESOURCE_DIR/scripts/setup.cfg $BUILD_DIR/setup.cfg
 
 # Compile module
 cd $BUILD_DIR
