@@ -18,7 +18,7 @@ try {
 			"serializableModel": "true",
 			"hideGenerationTimestamp": "false",
 	    	"httpUserAgent":"PureCloud SDK",
-			"packageDescription":"The official Java SDK for the PureCloud Platform API SDK",
+			"packageDescription":"A Java package to interface with the PureCloud Platform API",
 			"packageUrl":"https://developer.mypurecloud.com/api/rest/client-libraries/java/latest/"
 		};
 

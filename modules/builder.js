@@ -71,6 +71,9 @@ function Builder(configPath, localConfigPath) {
 		maybeInit(this, 'localConfig', {});
 		maybeInit(this.config, 'settings', {});
 		maybeInit(this.config.settings, 'swagger', {});
+		maybeInit(this.config.settings, 'swaggerCodegen', {});
+		maybeInit(this.config.settings.swaggerCodegen, 'generateApiTests', false);
+		maybeInit(this.config.settings.swaggerCodegen, 'generateModelTests', false);
 		maybeInit(this.config.settings, 'resourcePaths', {});
 		maybeInit(this.config, 'stageSettings', {});
 		maybeInit(this.config.stageSettings, 'prebuild', {});
@@ -81,6 +84,10 @@ function Builder(configPath, localConfigPath) {
 		checkAndThrow(this.config.settings, 'sdkRepo');
 		checkAndThrow(this.config.settings.swagger, 'oldSwaggerPath');
 		checkAndThrow(this.config.settings.swagger, 'newSwaggerPath');
+		checkAndThrow(this.config.settings, 'swaggerCodegen');
+		checkAndThrow(this.config.settings.swaggerCodegen, 'codegenLanguage');
+		checkAndThrow(this.config.settings.swaggerCodegen, 'resourceLanguage');
+		checkAndThrow(this.config.settings.swaggerCodegen, 'configFile');
 
 		// Normalize sdkRepo
 		if (typeof(this.config.settings.sdkRepo) === 'string') {
@@ -92,9 +99,9 @@ function Builder(configPath, localConfigPath) {
 
 		// Set env vars
 		setEnv('COMMON_ROOT', path.resolve('./'));
-		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.codegenlanguage)));
+		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.codegenLanguage)));
 		fs.removeSync(getEnv('SDK_REPO'));
-		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.codegenlanguage)));
+		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.codegenLanguage)));
 		fs.emptyDirSync(getEnv('SDK_TEMP'));
 
 		// Load env vars from config
@@ -331,16 +338,19 @@ function buildImpl() {
 
 		var command = '';
 		// Java command and options
-		command += `java ${getEnv('JAVA_OPTS', '')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
+		command += `java `;
+		command += `-DapiTests=${self.config.settings.swaggerCodegen.generateApiTests} `;
+		command += `-DmodelTests=${self.config.settings.swaggerCodegen.generateModelTests} `;
+		command += `${getEnv('JAVA_OPTS', '')} -XX:MaxPermSize=256M -Xmx1024M -DloggerPath=conf/log4j.properties `;
 		// Swagger-codegen jar file
 		command += `-jar ${self.config.settings.swaggerCodegen.jarPath} `;
 		// Swagger-codegen options
 		command += `generate `;
 		command += `-i ${newSwaggerTempFile} `;
-		command += `-l ${self.config.settings.swaggerCodegen.codegenlanguage} `;
+		command += `-l ${self.config.settings.swaggerCodegen.codegenLanguage} `;
 		command += `-o ${outputDir} `;
 		command += `-c ${self.config.settings.swaggerCodegen.configFile} `;
-		command += `-t ${self.resourcePaths.templates}`;
+		command += `-t ${self.resourcePaths.templates} `;
 		_.forEach(self.config.settings.swaggerCodegen.extraGeneratorOptions, (option) => command += ' ' + option);
 
 		log.info('Running swagger-codegen...');

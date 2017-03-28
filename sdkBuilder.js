@@ -4,14 +4,14 @@ const fs = require('fs');
 
 const swaggerDiff = require('./modules/swaggerDiff');
 const Builder = require('./modules/builder');
-
+const sdkLanguageRegex = /^(purecloudjava|pureclouddotnet|purecloudruby|purecloudpython)$/i;
 
 try {
 	program
 		.version('1.0.0')
 		.option('--config <path>', 'Path to SDK config file')
 		.option('--localconfig <path>', 'Path to SDK local config file')
-		.option('--sdk [language]', 'Generate the SDK for the given swager-codegen language using the default config', /^(purecloudjava)$/i)
+		.option('--sdk [language]', 'Generate the SDK for the given swager-codegen language using the default config', sdkLanguageRegex)
 		.parse(process.argv);
 
 	if (program.sdk) {

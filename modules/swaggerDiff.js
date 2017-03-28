@@ -3,6 +3,7 @@ const _ = require('lodash');
 const childProcess = require('child_process');
 const dot = require('dot');
 const pluralize = require('pluralize');
+const sleep = require('sleep');
 
 const log = require('./logger');
 
@@ -236,8 +237,21 @@ var self = module.exports = new SwaggerDiff();
 /* PRIVATE FUNCTIONS */
 
 function downloadFile(url) {
-    // Source: https://www.npmjs.com/package/download-file-sync
-    return childProcess.execFileSync('curl', ['--silent', '-L', url], {encoding: 'utf8'});
+    var i = 0;
+    while (i < 10) {
+        i++;
+        log.info(`Downloading file: ${url}`);
+        // Source: https://www.npmjs.com/package/download-file-sync
+        var file = childProcess.execFileSync('curl', ['--silent', '-L', url], {encoding: 'utf8'});
+        if (!file || file === '') {
+            log.info(`File was empty! sleeping for 5 seconds. Retries left: ${10-i}`);
+            sleep.sleep(5);
+        } else {
+            return file;
+        }
+    }
+    log.warn('Failed to get contents for file!');
+    return null;
 }
 
 function addChange(id, key, location, impact, oldValue, newValue, description) {

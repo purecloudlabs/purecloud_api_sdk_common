@@ -32,7 +32,7 @@ import {{invokerPackage}}.connector.*;
 {{>generatedAnnotation}}
 public class ApiClient implements AutoCloseable {
     private static final String DEFAULT_BASE_PATH = "{{basePath}}";
-    private static final String DEFAULT_USER_AGENT = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/{{artifactVersion}}/java";
+    private static final String DEFAULT_USER_AGENT = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/java";
     private static final String USER_AGENT_HEADER = "User-Agent";
 
     private static Map<String, Authentication> buildAuthentications() {
