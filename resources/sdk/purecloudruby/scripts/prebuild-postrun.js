@@ -17,7 +17,7 @@ try {
       "gemHomepage": "https://developer.mypurecloud.com/api/rest/client-libraries/ruby/latest/",
       "gemAuthor": "Genesys Developer Evangelists",
       "gemAuthorEmail": "developerevangelists@inin.com",
-      "httpUserAgent": `PureCloud SDK/Ruby ${version.displayFull}`,
+      "httpUserAgent": `PureCloud SDK`,
       "gitUserId": "mypurecloud",
       "gitRepoId": "purecloud_api_sdk_ruby"
     };
