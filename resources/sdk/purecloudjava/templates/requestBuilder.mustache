@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
 {{/imports}}
 
 {{#operation}}
-public class {{classname}} {
+public class {{requestClassname}} {
     private static final Pattern JSON_MIME_PATTERN = Pattern.compile("(?i)application\\/json(;.*)?");
     private static final String[] AUTH_NAMES = new String[] { };
 
@@ -36,7 +36,7 @@ public class {{classname}} {
 		this.{{paramName}} = {{paramName}};
 	}
 
-	public {{classname}} with{{paramTitle}}({{{dataType}}} {{paramName}}) {
+	public {{requestClassname}} with{{paramTitle}}({{{dataType}}} {{paramName}}) {
 	    this.set{{paramTitle}}({{paramName}});
 	    return this;
 	}
@@ -56,7 +56,7 @@ public class {{classname}} {
         this.customHeaders.put(name, value);
     }
 
-    public {{classname}} withCustomHeader(String name, String value) {
+    public {{requestClassname}} withCustomHeader(String name, String value) {
         this.addCustomHeader(name, value);
         return this;
     }
@@ -91,11 +91,18 @@ public class {{classname}} {
 		return new Builder();
 	}
 
+	{{#hasRequiredParams}}
+	public static Builder builder({{#requiredParams}}{{^-first}}, {{/-first}}{{{dataType}}} {{paramName}}{{/requiredParams}}) {
+	    return new Builder()
+	            .withRequiredParams({{#requiredParams}}{{^-first}}, {{/-first}}{{paramName}}{{/requiredParams}});
+	}
+	{{/hasRequiredParams}}
+
 	public static class Builder {
-		private final {{classname}} request;
+		private final {{requestClassname}} request;
 
 		private Builder() {
-			request = new {{classname}}();
+			request = new {{requestClassname}}();
 		}
 
 		{{#allParams}}
@@ -105,13 +112,16 @@ public class {{classname}} {
 		}
 		{{/allParams}}
 
+		{{#hasRequiredParams}}
 		public Builder withRequiredParams({{#requiredParams}}{{^-first}}, {{/-first}}{{{dataType}}} {{paramName}}{{/requiredParams}}) {
-{{#requiredParams}}			request.set{{paramName}}({{paramName}});
+{{#requiredParams}}			request.set{{paramTitle}}({{paramName}});
 			{{/requiredParams}}
 			return this;
 		}
+		{{/hasRequiredParams}}
 
-		public {{classname}} build() {
+
+		public {{requestClassname}} build() {
 			return request;
 		}
 	}
