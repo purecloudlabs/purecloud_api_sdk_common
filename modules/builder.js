@@ -92,9 +92,9 @@ function Builder(configPath, localConfigPath) {
 
 		// Set env vars
 		setEnv('COMMON_ROOT', path.resolve('./'));
-		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.codegenlanguage)));
+		setEnv('SDK_REPO', path.resolve(path.join('./output', this.config.settings.swaggerCodegen.codegenLanguage)));
 		fs.removeSync(getEnv('SDK_REPO'));
-		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.codegenlanguage)));
+		setEnv('SDK_TEMP', path.resolve(path.join('./temp', this.config.settings.swaggerCodegen.codegenLanguage)));
 		fs.emptyDirSync(getEnv('SDK_TEMP'));
 
 		// Load env vars from config
@@ -337,7 +337,7 @@ function buildImpl() {
 		// Swagger-codegen options
 		command += `generate `;
 		command += `-i ${newSwaggerTempFile} `;
-		command += `-l ${self.config.settings.swaggerCodegen.codegenlanguage} `;
+		command += `-l ${self.config.settings.swaggerCodegen.codegenLanguage} `;
 		command += `-o ${outputDir} `;
 		command += `-c ${self.config.settings.swaggerCodegen.configFile} `;
 		command += `-t ${self.resourcePaths.templates}`;

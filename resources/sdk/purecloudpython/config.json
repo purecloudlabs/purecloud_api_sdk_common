@@ -17,7 +17,7 @@
     },
     "swaggerCodegen": {
       "resourceLanguage": "purecloudpython",
-      "codegenlanguage": "purecloudpython",
+      "codegenLanguage": "purecloudpython",
       "jarPath": "${WORKSPACE}/swagger-codegen/modules/swagger-codegen-cli/target/swagger-codegen-cli.jar",
       "configFile": "${SDK_TEMP}/config.json",
       "extraGeneratorOptions": []
