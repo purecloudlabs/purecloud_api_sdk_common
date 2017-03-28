@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import {{invokerPackage}}.ApiException;
 import {{invokerPackage}}.ApiClient;
+import {{invokerPackage}}.ApiRequest;
 import {{invokerPackage}}.ApiResponse;
 import {{invokerPackage}}.Configuration;
 import {{modelPackage}}.*;
@@ -12,6 +13,8 @@ import {{invokerPackage}}.Pair;
 {{#imports}}import {{import}};
 {{/imports}}
 
+{{#operations}}{{#operation}}
+import {{package}}.request.{{requestClassname}};{{/operation}}{{/operations}}
 
 {{^fullJavaUtil}}
 import java.util.ArrayList;
@@ -42,7 +45,7 @@ public class {{classname}} {
    * @throws ApiException if fails to make API call
    */
   public {{#returnType}}{{{returnType}}} {{/returnType}}{{^returnType}}void {{/returnType}}{{operationId}}({{#allParams}}{{{dataType}}} {{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) throws ApiException {
-    {{#returnType}}return {{/returnType}}{{operationId}}WithHttpInfo({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}){{#returnType}}.getResponseObject(){{/returnType}};
+    {{#returnType}}return {{/returnType}}{{operationId}}WithHttpInfo({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}){{#returnType}}.getBody(){{/returnType}};
   }
 
   /**
@@ -52,7 +55,7 @@ public class {{classname}} {
    * @return {{{returnType}}}{{/returnType}}
    * @throws ApiException if fails to make API call
    */
-  public {{#returnType}}ApiResponse<{{{returnType}}}>{{/returnType}}{{^returnType}}ApiResponse{{/returnType}} {{operationId}}WithHttpInfo({{#allParams}}{{{dataType}}} {{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) throws ApiException {
+  public {{#returnType}}ApiResponse<{{{returnType}}}>{{/returnType}}{{^returnType}}ApiResponse<Void>{{/returnType}} {{operationId}}WithHttpInfo({{#allParams}}{{{dataType}}} {{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) throws ApiException {
     Object {{localVariablePrefix}}localVarPostBody = {{#bodyParam}}{{paramName}}{{/bodyParam}}{{^bodyParam}}null{{/bodyParam}};
     {{#allParams}}{{#required}}
     // verify the required parameter '{{paramName}}' is set
@@ -95,6 +98,27 @@ public class {{classname}} {
 
     return {{localVariablePrefix}}apiClient.invokeAPIVerbose({{localVariablePrefix}}localVarPath, "{{httpMethod}}", {{localVariablePrefix}}localVarQueryParams, {{localVariablePrefix}}localVarPostBody, {{localVariablePrefix}}localVarHeaderParams, {{localVariablePrefix}}localVarFormParams, {{localVariablePrefix}}localVarAccept, {{localVariablePrefix}}localVarContentType, {{localVariablePrefix}}localVarAuthNames, {{#returnType}}new TypeReference<{{{returnType}}}>() {}{{/returnType}}{{^returnType}}null{{/returnType}});
   }
+
+  /**
+   * {{summary}}
+   * {{notes}}
+   * @request The request object
+   * @throws ApiException if fails to make API call
+   */
+  public {{#returnType}}{{{returnType}}} {{/returnType}}{{^returnType}}void {{/returnType}}{{operationId}}({{requestClassname}} request) throws ApiException {
+    {{#returnType}}return {{/returnType}}{{localVariablePrefix}}apiClient.invokeAPI(request.withHttpInfo(), {{#returnType}}new TypeReference<{{{returnType}}}>() {}{{/returnType}}{{^returnType}}null{{/returnType}});
+  }
+
+  /**
+   * {{summary}}
+   * {{notes}}
+   * @request The request object
+   * @throws ApiException if fails to make API call
+   */
+  public {{#returnType}}ApiResponse<{{{returnType}}}>{{/returnType}}{{^returnType}}ApiResponse<Void>{{/returnType}} {{operationId}}(ApiRequest<{{#bodyParam}}{{{dataType}}}{{/bodyParam}}{{^bodyParam}}Void{{/bodyParam}}> request) throws ApiException {
+    return {{localVariablePrefix}}apiClient.<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Void{{/returnType}}>invokeAPIVerbose(request, {{#returnType}}new TypeReference<{{{returnType}}}>() {}{{/returnType}}{{^returnType}}null{{/returnType}});
+  }
+
   {{/operation}}
 }
 {{/operations}}

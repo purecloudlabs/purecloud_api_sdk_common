@@ -7,22 +7,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpRequestInterceptor;
-import org.apache.http.HttpResponseInterceptor;
-import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.*;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
 
-import java.io.Closeable;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -30,15 +17,20 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import com.google.common.util.concurrent.SettableFuture;
 
 import {{invokerPackage}}.auth.Authentication;
 import {{invokerPackage}}.auth.HttpBasicAuth;
 import {{invokerPackage}}.auth.ApiKeyAuth;
 import {{invokerPackage}}.auth.OAuth;
 import {{invokerPackage}}.ApiDateFormat;
+import {{invokerPackage}}.connector.*;
 
 {{>generatedAnnotation}}
-public class ApiClient implements Closeable {
+public class ApiClient implements AutoCloseable {
     private static final String DEFAULT_BASE_PATH = "{{basePath}}";
     private static final String DEFAULT_USER_AGENT = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen{{/httpUserAgent}}/java";
     private static final String USER_AGENT_HEADER = "User-Agent";
@@ -54,15 +46,15 @@ public class ApiClient implements Closeable {
 
     private final Map<String, String> defaultHeaderMap;
     private final String basePath;
-    private final Integer connectionTimeout;
     private final Boolean shouldThrowErrors;
 
     private final DateFormat dateFormat;
     private final ObjectMapper objectMapper;
 
+    private final ConnectorProperties properties;
+
     private final Map<String, Authentication> authentications;
-    private final SLF4JInterceptor.DetailLevel detailLevel;
-    private final CloseableHttpClient httpClient;
+    private final ApiClientConnector connector;
 
     public ApiClient() {
         this(Builder.standard());
@@ -76,8 +68,7 @@ public class ApiClient implements Closeable {
         this.basePath = basePath;
 
         this.defaultHeaderMap = new HashMap<>(builder.defaultHeaderMap);
-        this.connectionTimeout = builder.connectionTimeout;
-        this.detailLevel = builder.detailLevel;
+        this.properties = builder.properties.copy();
         this.shouldThrowErrors = builder.shouldThrowErrors == null ? true : builder.shouldThrowErrors;
 
         DateFormat dateFormat = builder.dateFormat;
@@ -94,12 +85,12 @@ public class ApiClient implements Closeable {
 
         this.authentications = buildAuthentications(builder);
 
-        this.httpClient = buildHttpClient(builder);
+        this.connector = buildHttpConnector(builder);
     }
 
     @Override
-    public void close() throws IOException {
-        httpClient.close();
+    public void close() throws Exception {
+        connector.close();
     }
 
     private ObjectMapper buildObjectMapper(DateFormat dateFormat) {
@@ -132,26 +123,8 @@ public class ApiClient implements Closeable {
         return authentications;
     }
 
-    private CloseableHttpClient buildHttpClient(Builder builder) {
-        SLF4JInterceptor loggingInterceptor = new SLF4JInterceptor();
-        SLF4JInterceptor.DetailLevel detailLevel = builder.detailLevel;
-        if (detailLevel != null) {
-            loggingInterceptor.setDetailLevel(detailLevel);
-        }
-
-        RequestConfig.Builder requestBuilder = RequestConfig.custom();
-        Integer connectionTimeout = builder.connectionTimeout;
-        if (connectionTimeout != null && connectionTimeout > 0) {
-            requestBuilder = requestBuilder.setConnectTimeout(connectionTimeout)
-                    .setSocketTimeout(connectionTimeout)
-                    .setConnectionRequestTimeout(connectionTimeout);
-        }
-
-        return HttpClients.custom()
-                .setDefaultRequestConfig(requestBuilder.build())
-                .addInterceptorFirst((HttpRequestInterceptor) loggingInterceptor)
-                .addInterceptorFirst((HttpResponseInterceptor) loggingInterceptor)
-                .build();
+    private ApiClientConnector buildHttpConnector(Builder builder) {
+        return ApiClientConnectorLoader.load(properties);
     }
 
     public boolean getShouldThrowErrors() {
@@ -179,7 +152,7 @@ public class ApiClient implements Closeable {
      * Connect timeout (in milliseconds).
      */
     public int getConnectTimeout() {
-        return (connectionTimeout == null) ? 0 : connectionTimeout;
+        return properties.getProperty(ApiClientConnectorProperty.CONNECTION_TIMEOUT, Integer.class, 0);
     }
 
     /**
@@ -365,7 +338,14 @@ public class ApiClient implements Closeable {
      * @param queryParams The query parameters
      * @return The full URL
      */
-    private String buildUrl(String path, List<Pair> queryParams) {
+    private String buildUrl(String path, Map<String, String> pathParams, List<Pair> queryParams) {
+        path = path.replaceAll("\\{format\\}", "json");
+        if (pathParams != null && !pathParams.isEmpty()) {
+            for (Map.Entry<String, String> entry : pathParams.entrySet()) {
+                path = path.replaceAll("\\{" + entry.getKey() + "\\}", entry.getValue());
+            }
+        }
+
         final StringBuilder url = new StringBuilder();
         url.append(basePath).append(path);
 
@@ -389,70 +369,207 @@ public class ApiClient implements Closeable {
         return url.toString();
     }
 
-    private <T> ApiResponse<T> getAPIResponse(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames) throws ApiException, IOException {
+    private ApiClientConnectorRequest prepareConnectorRequest(ApiRequest<?> request) throws Exception {
+        final String path = request.getPath();
+        final List<Pair> queryParams = new ArrayList<>(request.getQueryParams());
+        final Map<String, String> headers = new HashMap<>(request.getHeaderParams());
+        headers.putAll(request.getCustomHeaders());
+
+        updateParamsForAuth(request.getAuthNames(), queryParams, headers);
+        final String url = buildUrl(path, request.getPathParams(), queryParams);
+
+        for (String key : defaultHeaderMap.keySet()) {
+            headers.putIfAbsent(key, defaultHeaderMap.get(key));
+        }
+
+        final Object body = request.getBody();
+        final Map<String, Object> formParams = request.getFormParams();
+        final String serializedBody;
         if (body != null && !formParams.isEmpty()) {
             throw new ApiException(500, "Cannot have body and form params");
         }
+        else if (body != null) {
+            serializedBody = serialize(body);
+        }
+        else if (formParams != null) {
+            serializedBody = getXWWWFormUrlencodedParams(formParams);
+        }
+        else {
+            serializedBody = null;
+        }
 
-        updateParamsForAuth(authNames, queryParams, headerParams);
-        final String url = buildUrl(path, queryParams);
+        return new ApiClientConnectorRequest() {
+            @Override
+            public String getMethod() {
+                return request.getMethod();
+            }
 
-        // Build request object
-        HttpUriRequest request;
-        if ("GET".equals(method)) {
-            HttpGet req = new HttpGet(url);
-            request = req;
-        } else if ("POST".equals(method)) {
-            HttpPost req = new HttpPost(url);
-            if (contentType.startsWith("application/x-www-form-urlencoded")) {
-                List<NameValuePair> nvps = new ArrayList<>();
-                for (Entry<String, Object> param : formParams.entrySet()) {
-                    nvps.add(new BasicNameValuePair(param.getKey(), parameterToString(param.getValue())));
+            @Override
+            public String getUrl() {
+                return url;
+            }
+
+            @Override
+            public Map<String, String> getHeaders() {
+                return headers;
+            }
+
+            @Override
+            public boolean hasBody() {
+                return (serializedBody != null);
+            }
+
+            @Override
+            public String readBody() throws IOException {
+                return serializedBody;
+            }
+
+            @Override
+            public InputStream getBody() throws IOException {
+                return (serializedBody != null) ? new ByteArrayInputStream(serializedBody.getBytes("UTF8")) : null;
+            }
+        };
+    }
+
+    private <T> ApiResponse<T> interpretConnectorResponse(ApiClientConnectorResponse response, TypeReference<T> returnType) throws Exception {
+        int statusCode = response.getStatusCode();
+        Map<String, String> headers = response.getHeaders();
+
+        if (statusCode >= 200 && statusCode < 300) {
+            String body = response.readBody();
+            final T entity;
+            if (statusCode != 204 && body != null && returnType != null) {
+                if (returnType.getType() != Void.class) {
+                    entity = objectMapper.readValue(body, returnType);
                 }
-                req.setEntity(new UrlEncodedFormEntity(nvps));
-            } else {
-                req.setEntity(new StringEntity(serialize(body), "UTF-8"));
+                else {
+                    entity = null;
+                }
             }
-            request = req;
-        } else if ("PUT".equals(method)) {
-            HttpPut req = new HttpPut(url);
-            req.setEntity(new StringEntity(serialize(body)));
-            request = req;
-        } else if ("DELETE".equals(method)) {
-            HttpDelete req = new HttpDelete(url);
-            request = req;
-        } else if ("PATCH".equals(method)) {
-            HttpPatch req = new HttpPatch(url);
-            req.setEntity(new StringEntity(serialize(body)));
-            request = req;
-        } else {
-            throw new ApiException(500, "unknown method type " + method);
-        }
+            else {
+                entity = null;
+            }
+            return new ApiResponse<T>() {
+                @Override
+                public Exception getException() {
+                    return null;
+                }
 
-        // Add headers
-        if (accept != null && !accept.isEmpty()) {
-            request.setHeader("Accept", accept);
+                @Override
+                public Integer getStatusCode() {
+                    return statusCode;
+                }
+
+                @Override
+                public boolean hasRawBody() {
+                    return (body != null);
+                }
+
+                @Override
+                public String getRawBody() {
+                    return body;
+                }
+
+                @Override
+                public T getBody() {
+                    return entity;
+                }
+
+                @Override
+                public Map<String, String> getHeaders() {
+                    return headers;
+                }
+
+                @Override
+                public String getHeader(String key) {
+                    return headers.get(key);
+                }
+
+                @Override
+                public String getCorrelationId() {
+                    return getHeader("ININ-Correlation-ID");
+                }
+
+                @Override
+                public void close() throws Exception { }
+            };
         }
-        if (contentType != null && !contentType.isEmpty()) {
-            request.setHeader("Content-Type", contentType);
+        else {
+            String message = "error";
+            String body = response.readBody();
+            throw new ApiException(statusCode, message, headers, body);
         }
-        for (String key : headerParams.keySet()) {
-            request.setHeader(key, headerParams.get(key));
+    }
+
+    private <T> ApiResponse<T> getAPIResponse(ApiRequest<?> request, TypeReference<T> returnType) throws Exception {
+        ApiClientConnectorRequest connectorRequest = prepareConnectorRequest(request);
+        try (ApiClientConnectorResponse connectorResponse = connector.invoke(connectorRequest)) {
+            return interpretConnectorResponse(connectorResponse, returnType);
         }
-        for (String key : defaultHeaderMap.keySet()) {
-            if (!headerParams.containsKey(key)) {
-                request.setHeader(key, defaultHeaderMap.get(key));
+    }
+
+    private <T> Future<ApiResponse<T>> getAPIResponseAsync(ApiRequest<?> request, TypeReference<T> returnType, AsyncApiCallback<ApiResponse<T>> callback) {
+        SettableFuture<ApiResponse<T>> future = SettableFuture.create();
+        try {
+            ApiClientConnectorRequest connectorRequest = prepareConnectorRequest(request);
+            connector.invokeAsync(connectorRequest, new AsyncApiCallback<ApiClientConnectorResponse>() {
+                @Override
+                public void onCompleted(ApiClientConnectorResponse connectorResponse) {
+                    try {
+                        ApiResponse<T> response;
+                        try {
+                            response = interpretConnectorResponse(connectorResponse, returnType);
+                        }
+                        finally {
+                            connectorResponse.close();
+                        }
+                        notifySuccess(future, callback, response);
+                    }
+                    catch (Throwable exception) {
+                        notifyFailure(future, callback, exception);
+                    }
+                }
+
+                @Override
+                public void onFailed(Throwable exception) {
+                    notifyFailure(future, callback, exception);
+                }
+            });
+        }
+        catch (Throwable exception) {
+            notifyFailure(future, callback, exception);
+        }
+        return future;
+    }
+
+    private <T> void notifySuccess(SettableFuture<T> future, AsyncApiCallback<T> callback, T result) {
+        if (callback != null) {
+            try {
+                callback.onCompleted(result);
+                future.set(result);
+            }
+            catch (Throwable exception) {
+                future.setException(exception);
             }
         }
+        else {
+            future.set(result);
+        }
+    }
 
-
-        CloseableHttpResponse response = null;
-        ApiResponse<T> apiResponse = new ApiResponse<>(request, null);
-
-        response = httpClient.execute(request);
-        apiResponse.setHttpResponse(response);
-
-        return apiResponse;
+    private <T> void notifyFailure(SettableFuture<T> future, AsyncApiCallback<T> callback, Throwable exception) {
+        if (callback != null) {
+            try {
+                callback.onFailed(exception);
+                future.setException(exception);
+            }
+            catch (Throwable callbackException) {
+                future.setException(callbackException);
+            }
+        }
+        else {
+            future.setException(exception);
+        }
     }
 
     /**
@@ -470,69 +587,46 @@ public class ApiClient implements Closeable {
      * @return The response body in type of string
      */
     public <T> ApiResponse<T> invokeAPIVerbose(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
-        ApiResponse<T> response = null;
+        return invokeAPIVerbose(new ApiRequestWrapper<>(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames), returnType);
+    }
+
+    public <T> ApiResponse<T> invokeAPIVerbose(ApiRequest<?> request, TypeReference<T> returnType) throws ApiException {
         try {
-            try {
-                response = getAPIResponse(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames);
-            } catch (IOException e) {
-                throw new ApiException(e);
+            return getAPIResponse(request, returnType);
+        }
+        catch (Exception exception) {
+            if (shouldThrowErrors) {
+                if (exception instanceof ApiException) {
+                    throw (ApiException)exception;
+                }
+                throw new ApiException(exception);
             }
+            return new ApiExceptionResponse<>(exception);
+        }
+    }
 
-            int statusCode = response.getHttpResponse().getStatusLine().getStatusCode();
-            Header[] responseHeaders = response.getHttpResponse().getAllHeaders();
+    public <T> Future<ApiResponse<T>> invokeAPIVerboseAsync(ApiRequest<?> request, TypeReference<T> returnType, AsyncApiCallback<ApiResponse<T>> callback) {
+        if (shouldThrowErrors) {
+            return getAPIResponseAsync(request, returnType, callback);
+        }
+        else {
+            SettableFuture<ApiResponse<T>> future = SettableFuture.create();
+            getAPIResponseAsync(request, returnType, new AsyncApiCallback<ApiResponse<T>>() {
+                @Override
+                public void onCompleted(ApiResponse<T> response) {
+                    notifySuccess(future, callback, response);
+                }
 
-            // Parse response body
-            if (statusCode >= 200 && statusCode < 300) {
-                HttpEntity entity = response.getHttpResponse().getEntity();
-                try {
-                    if (statusCode != 204 && entity != null && returnType != null) {
-                        String rawResponseBody = EntityUtils.toString(entity);
-                        response.setRawResponseBody(rawResponseBody);
-                        if (rawResponseBody != null && !rawResponseBody.isEmpty()) {
-                            @SuppressWarnings("unchecked")
-                            T responseObject = (T) objectMapper.readValue(rawResponseBody, returnType);
-                            response.setResponseObject(responseObject);
-                        }
+                @Override
+                public void onFailed(Throwable exception) {
+                    if (!(exception instanceof Exception)) {
+                        exception = new ExecutionException(exception);
+
                     }
-                } catch (IOException e) {
-                    throw new ApiException(e);
+                    notifySuccess(future, callback, new ApiExceptionResponse<>((Exception)exception));
                 }
-            } else if (statusCode == HttpStatus.SC_NO_CONTENT) {
-                // No body, it's cool.
-            } else {
-                String message = "error";
-                String respBody = null;
-                HttpEntity entity = response.getHttpResponse().getEntity();
-                if (entity != null) {
-                    try {
-                        respBody = EntityUtils.toString(entity);
-                        message = respBody;
-                    } catch (RuntimeException | IOException e) {
-                        // e.printStackTrace();
-                    }
-                }
-                throw new ApiException(statusCode,
-                        message,
-                        response.getResponseHeaders(),
-                        respBody);
-            }
-
-            return response;
-        } catch (ApiException e) {
-            if (shouldThrowErrors)
-                throw e;
-            else if (response == null)
-                response = new ApiResponse<>(null, null);
-            response.setException(e);
-            return response;
-        } finally {
-            try {
-                if (response != null && response.getHttpResponse() != null) {
-                    response.getHttpResponse().close();
-                }
-            } catch (IOException e) {
-                //e.printStackTrace();
-            }
+            });
+            return future;
         }
     }
 
@@ -553,7 +647,7 @@ public class ApiClient implements Closeable {
     public <T> T invokeAPI(String path, String method, List<Pair> queryParams, Object body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames, TypeReference<T> returnType) throws ApiException {
         T response = null;
         try {
-            response = invokeAPIVerbose(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames, returnType).getResponseObject();
+            response = invokeAPIVerbose(path, method, queryParams, body, headerParams, formParams, accept, contentType, authNames, returnType).getBody();
             return response;
         } catch (ApiException e) {
             if (shouldThrowErrors)
@@ -561,6 +655,41 @@ public class ApiClient implements Closeable {
             else
                 return response;
         }
+    }
+
+    /**
+     * Invoke API by sending HTTP request with the given options.
+     *
+     * @param request The request object
+     * @return The response body in type of string
+     */
+    public <T> T invokeAPI(ApiRequest<?> request, TypeReference<T> returnType) throws ApiException {
+        T response = null;
+        try {
+            response = invokeAPIVerbose(request, returnType).getBody();
+            return response;
+        } catch (ApiException e) {
+            if (shouldThrowErrors)
+                throw e;
+            else
+                return response;
+        }
+    }
+
+    public <T> Future<T> invokeAPIAsync(ApiRequest<?> request, TypeReference<T> returnType, AsyncApiCallback<T> callback) {
+        SettableFuture<T> future = SettableFuture.create();
+        invokeAPIVerboseAsync(request, returnType, new AsyncApiCallback<ApiResponse<T>>() {
+            @Override
+            public void onCompleted(ApiResponse<T> response) {
+                notifySuccess(future, callback, response.getBody());
+            }
+
+            @Override
+            public void onFailed(Throwable exception) {
+                notifySuccess(future, callback, null);
+            }
+        });
+        return future;
     }
 
     /**
@@ -604,14 +733,14 @@ public class ApiClient implements Closeable {
 
     public static class Builder {
         public static Builder standard() {
-            return new Builder();
+            return new Builder(new ConnectorProperties());
         }
 
         public static Builder from(ApiClient client) {
             if (client == null) {
                 throw new NullPointerException();
             }
-            Builder builder = new Builder();
+            Builder builder = new Builder(client.properties);
             builder.defaultHeaderMap.putAll(client.defaultHeaderMap);
             for (Authentication authentication : client.authentications.values()) {
                 if (authentication instanceof OAuth) {
@@ -621,9 +750,7 @@ public class ApiClient implements Closeable {
             builder.dateFormat = client.dateFormat;
             builder.objectMapper = client.objectMapper;
             builder.basePath = client.basePath;
-            builder.connectionTimeout = client.connectionTimeout;
             builder.shouldThrowErrors = client.shouldThrowErrors;
-            builder.detailLevel = client.detailLevel;
             return builder;
         }
 
@@ -632,15 +759,15 @@ public class ApiClient implements Closeable {
         }
 
         private final Map<String, String> defaultHeaderMap = new HashMap<>();
+        private final ConnectorProperties properties;
         private String accessToken;
         private ObjectMapper objectMapper;
         private DateFormat dateFormat;
         private String basePath;
-        private Integer connectionTimeout = 0;
         private Boolean shouldThrowErrors = true;
-        private SLF4JInterceptor.DetailLevel detailLevel;
 
-        private Builder() {
+        private Builder(ConnectorProperties properties) {
+            this.properties = (properties != null) ? properties.copy() : new ConnectorProperties();
             withUserAgent(DEFAULT_USER_AGENT);
         }
 
@@ -674,7 +801,7 @@ public class ApiClient implements Closeable {
         }
 
         public Builder withConnectionTimeout(int connectionTimeout) {
-            this.connectionTimeout = connectionTimeout;
+            properties.setProperty(ApiClientConnectorProperty.CONNECTION_TIMEOUT, connectionTimeout);
             return this;
         }
 
@@ -683,13 +810,175 @@ public class ApiClient implements Closeable {
             return this;
         }
 
-        public Builder withDetailLevel(SLF4JInterceptor.DetailLevel detailLevel) {
-            this.detailLevel = detailLevel;
+        public Builder withDetailLevel(DetailLevel detailLevel) {
+            properties.setProperty(ApiClientConnectorProperty.DETAIL_LEVEL, detailLevel);
             return this;
         }
 
         public ApiClient build() {
             return new ApiClient(this);
         }
+    }
+
+    private static class ConnectorProperties implements ApiClientConnectorProperties {
+        private final Map<String, Object> properties;
+
+        public ConnectorProperties() {
+            this.properties = new HashMap<>();
+        }
+
+        public ConnectorProperties(Map<String, Object> properties) {
+            this.properties = new HashMap<>();
+            if (properties != null) {
+                this.properties.putAll(properties);
+            }
+        }
+
+        @Override
+        public <T> T getProperty(String key, Class<T> propertyClass, T defaultValue) {
+            Object value = properties.get(key);
+            if (propertyClass.isInstance(value)) {
+                return propertyClass.cast(value);
+            }
+            return defaultValue;
+        }
+
+        public void setProperty(String key, Object value) {
+            properties.put(key, value);
+        }
+
+        public ConnectorProperties copy() {
+            return new ConnectorProperties(properties);
+        }
+    }
+
+    private static class ApiRequestWrapper<T> implements ApiRequest<T> {
+        private final String path;
+        private final String method;
+        private final List<Pair> queryParams;
+        private final T body;
+        private final Map<String, String> headerParams;
+        private final Map<String, Object> formParams;
+        private final String accept;
+        private final String contentType;
+        private final String[] authNames;
+
+        public ApiRequestWrapper(String path, String method, List<Pair> queryParams, T body, Map<String, String> headerParams, Map<String, Object> formParams, String accept, String contentType, String[] authNames) {
+            this.path = path;
+            this.method = method;
+            this.queryParams = queryParams;
+            this.body = body;
+            this.headerParams = headerParams;
+            this.formParams = formParams;
+            this.accept = accept;
+            this.contentType = contentType;
+            this.authNames = authNames;
+        }
+
+        @Override
+        public String getPath() {
+            return path;
+        }
+
+        @Override
+        public String getMethod() {
+            return method;
+        }
+
+        @Override
+        public Map<String, String> getPathParams() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public List<Pair> getQueryParams() {
+            return queryParams;
+        }
+
+        @Override
+        public Map<String, Object> getFormParams() {
+            return formParams;
+        }
+
+        @Override
+        public Map<String, String> getHeaderParams() {
+            return headerParams;
+        }
+
+        @Override
+        public Map<String, String> getCustomHeaders() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
+        }
+
+        @Override
+        public String getAccepts() {
+            return accept;
+        }
+
+        @Override
+        public T getBody() {
+            return body;
+        }
+
+        @Override
+        public String[] getAuthNames() {
+            return authNames;
+        }
+    }
+
+    private static class ApiExceptionResponse<T> implements ApiResponse<T> {
+        private final Exception exception;
+
+        public ApiExceptionResponse(Exception exception) {
+            this.exception = exception;
+        }
+
+        @Override
+        public Exception getException() {
+            return exception;
+        }
+
+        @Override
+        public Integer getStatusCode() {
+            return 500;
+        }
+
+        @Override
+        public boolean hasRawBody() {
+            return false;
+        }
+
+        @Override
+        public String getRawBody() {
+            return "";
+        }
+
+        @Override
+        public T getBody() {
+            return null;
+        }
+
+        @Override
+        public Map<String, String> getHeaders() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public String getHeader(String key) {
+            return "";
+        }
+
+        @Override
+        public String getCorrelationId() {
+            return "";
+        }
+
+        @Override
+        public void close() throws Exception { }
     }
 }

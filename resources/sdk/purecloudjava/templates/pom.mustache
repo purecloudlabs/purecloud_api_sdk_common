@@ -230,6 +230,16 @@
       <artifactId>httpclient</artifactId>
       <version>${apache-httpclient-version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.squareup.okhttp</groupId>
+      <artifactId>okhttp</artifactId>
+      <version>${okhttpclient-version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.asynchttpclient</groupId>
+        <artifactId>async-http-client</artifactId>
+        <version>${ning-asynchttpclient-version}</version>
+    </dependency>
 
     <!-- JSON processing: jackson -->
     <dependency>
@@ -284,6 +294,13 @@
       <artifactId>nv-websocket-client</artifactId>
       <version>${nv-websocket-client-version}</version>
     </dependency>
+
+    <!-- for asynchronous helper classes -->
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>${guava-version}</version>
+    </dependency>
   </dependencies>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -295,6 +312,9 @@
     <maven-plugin-version>1.0.0</maven-plugin-version>
     <junit-version>4.12</junit-version>
     <apache-httpclient-version>4.5.2</apache-httpclient-version>
+    <okhttpclient-version>2.7.0</okhttpclient-version>
+    <ning-asynchttpclient-version>2.0.30</ning-asynchttpclient-version>
     <nv-websocket-client-version>1.31</nv-websocket-client-version>
+    <guava-version>21.0</guava-version>
   </properties>
 </project>
