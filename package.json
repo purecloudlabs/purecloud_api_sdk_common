@@ -23,7 +23,7 @@
       "github-api-promise":"*",
       "dateformat":"*",
       "request" : "2.67.0",
-      "superagent" : "1.0",
+      "superagent" : "5.2",
       "purecloud_api_sdk_javascript":"*"
   },
   "devDependencies":{
